@@ -3,7 +3,6 @@
 # Root config items
 PROJECT_DIR = '/home/UNIXHOME/mholt/projects/starphase_runner'
 SNAKEMAKE_PROFILE = '/home/UNIXHOME/mholt/snakemake_profiles/slurm'
-STARPHASE_DATABASE = '/home/UNIXHOME/mholt/crates/pharmgoat/public/data/v0.14.1/pbstarphase_20240826.json.gz'
 REFERENCE_FASTA = '/pbi/collections/appslabht/reference/human_GRCh38_no_alt_analysis_set.fasta'
 
 #anything derived from the root config
@@ -13,6 +12,8 @@ PIPELINE_FOLDER = f'{PROJECT_DIR}/pipeline'
 DATA_FOLDER = f'{PROJECT_DIR}/data'
 RESULTS_FOLDER = f'{PROJECT_DIR}/results'
 SCRIPTS_FOLDER = f'{PROJECT_DIR}/scripts'
+
+STARPHASE_DATABASE = f'{DATA_FOLDER}/starphase_db/v0.14.1/pbstarphase_20240826.json.gz'
 
 SNAKEFILE = f'{RULES_FOLDER}/CohortPipeline.smk'
 

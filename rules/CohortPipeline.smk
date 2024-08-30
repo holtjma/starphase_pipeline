@@ -60,14 +60,31 @@ rule starphase_cohort:
     input:
         get_starphase_cohort()
 
-localrules: collation_file
+# The next two rules run fast and could be localrules, but we want to capture the logs in the event of failure
 rule collation_file:
     output:
         tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
     params:
         script=f'{SCRIPTS_FOLDER}/GenerateCollationFile.py'
+    log: f'{PIPELINE_FOLDER}/logs/collation/all_batches.log'
     shell: '''
         python3 {params.script} \
+            -o {output.tsv}
+    '''
+
+rule aggregate_summary:
+    input:
+        peddy_files=get_peddy_cohort(),
+        starphase_file=get_starphase_cohort(),
+        tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
+    output:
+        tsv=f'{PIPELINE_FOLDER}/aggregate/aggregate_summary.tsv'
+    params:
+        script=f'{SCRIPTS_FOLDER}/AggregateData.py'
+    log: f'{PIPELINE_FOLDER}/logs/aggregate/aggregate_summary.log'
+    shell: '''
+        python3 {params.script} \
+            -i {input.tsv} \
             -o {output.tsv}
     '''
 
