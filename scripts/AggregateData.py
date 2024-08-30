@@ -222,22 +222,23 @@ def collectByAncestry(all_data):
             # check if this is an HLA gene with delta values
             if gene in hla_deltas:
                 # first do cDNA
-                cdna_deltas = [
-                    hla_deltas[gene]['hap1_cdna_delta'],
-                    hla_deltas[gene]['hap2_cdna_delta']
-                ]
-                for cd in cdna_deltas:
-                    data_key = (f'{gene}_cdna_delta', ancestry, sex, str(cd)) # "cd" can be an int or None, so convert to str for comparison
-                    ancestry_counts[data_key] = ancestry_counts.get(data_key, 0) + 1
+                # can be an int or None, so convert to str for sorting
+                cdna_deltas = sorted([
+                    str(hla_deltas[gene]['hap1_cdna_delta']),
+                    str(hla_deltas[gene]['hap2_cdna_delta'])
+                ])
+                c_delta_dip = '/'.join(cdna_deltas)
+                data_key = (f'{gene}_cdna_delta', ancestry, sex, c_delta_dip)
+                ancestry_counts[data_key] = ancestry_counts.get(data_key, 0) + 1
 
                 # now do DNA
-                dna_deltas = [
-                    hla_deltas[gene]['hap1_dna_delta'],
-                    hla_deltas[gene]['hap2_dna_delta']
-                ]
-                for cd in dna_deltas:
-                    data_key = (f'{gene}_dna_delta', ancestry, sex, str(cd)) # "cd" can be an int or None, so convert to str for comparison
-                    ancestry_counts[data_key] = ancestry_counts.get(data_key, 0) + 1
+                dna_deltas = sorted([
+                    str(hla_deltas[gene]['hap1_dna_delta']),
+                    str(hla_deltas[gene]['hap2_dna_delta'])
+                ])
+                delta_dip = '/'.join(dna_deltas)
+                data_key = (f'{gene}_dna_delta', ancestry, sex, delta_dip)
+                ancestry_counts[data_key] = ancestry_counts.get(data_key, 0) + 1
     
     return ancestry_counts
 
