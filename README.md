@@ -1,12 +1,12 @@
 # StarPhase cohort pipeline
 This repo contains a pipeline and collection of scripts to generate aggregate summary statistics for cohorts from different contributing sites.
 
-## Users instructions
+## User instructions
 This cohort pipeline assumes you are operating in a cluster environment and have conda installed.
 To install conda, we recommend the [Bioconda setup instructions](https://bioconda.github.io).
 
 ### Generating a cohort summary
-This is the main process for generating ancestry-level aggregate statistics from a cohort.
+This is the main process for generating anonymized, ancestry-level aggregate statistics from a cohort.
 
 1. Clone this repository to your local compute infrastructure:
 ```
