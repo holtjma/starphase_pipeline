@@ -7,7 +7,7 @@ from PipelineConfig import *
 PREPRINT_SNAKEFILE = f'{SCRIPTS_FOLDER}/preprint/PreprintExtras.smk'
 
 if __name__ == '__main__':
-    description = 'Runs the extra tools for the pre-print'
+    description = 'Runs the tools for the data collation for StarPhase publication'
     p = ap.ArgumentParser(description=description, formatter_class=ap.RawTextHelpFormatter)
 
     #standard options we have for all snakemake pipelines
@@ -18,6 +18,8 @@ if __name__ == '__main__':
     #things we want to generate
     p.add_argument('-s', '--starphase-cohort', dest='starphase_cohort', action='store_true', default=False, help='generate the StarPhase cohort results (default: False)')
     p.add_argument('-p', '--peddy-cohort', dest='peddy_cohort', action='store_true', default=False, help='generate the Peddy cohort results (default: False)')
+    p.add_argument('-c', '--cohort-file', dest='cohort_file', action='store_true', default=False, help='generate the cohort file for final collation (default: False)')
+    p.add_argument('-a', '--aggregate-summary', dest='aggregate_summary', action='store_true', default=False, help='generate the aggregate summary file (default: False)')
     
     args = p.parse_args()
 
@@ -29,6 +31,12 @@ if __name__ == '__main__':
 
     if args.target_all or args.peddy_cohort:
         targets.append('peddy_cohort')
+
+    if args.target_all or args.cohort_file:
+        targets.append('collation_file')
+
+    if args.target_all or args.aggregate_summary:
+        targets.append('aggregate_summary')
     
     snakemake_frags = [
         'snakemake',

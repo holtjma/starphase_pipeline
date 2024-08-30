@@ -60,6 +60,17 @@ rule starphase_cohort:
     input:
         get_starphase_cohort()
 
+localrules: collation_file
+rule collation_file:
+    output:
+        tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
+    params:
+        script=f'{SCRIPTS_FOLDER}/GenerateCollationFile.py'
+    shell: '''
+        python3 {params.script} \
+            -o {output.tsv}
+    '''
+
 #######################################################################
 # Ancestry checks
 #######################################################################

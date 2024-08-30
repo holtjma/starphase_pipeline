@@ -1,0 +1,6 @@
+*.err
+*.out
+pipeline
+scripts/.snakemake
+scripts/__pycache__
+
