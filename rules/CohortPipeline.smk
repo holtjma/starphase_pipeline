@@ -1,8 +1,10 @@
 
 import csv
 
+# get at the PipelineConfig
 import sys
-sys.path.append('../scripts')
+script_folder = os.path.join(os.path.dirname(workflow.basedir), 'scripts')
+sys.path.append(script_folder)
 from PipelineConfig import *
 
 from SharedParsing import load_batches

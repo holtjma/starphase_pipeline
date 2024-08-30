@@ -1,5 +1,6 @@
 *.err
 *.out
+.snakemake
 pipeline
 scripts/.snakemake
 scripts/__pycache__
