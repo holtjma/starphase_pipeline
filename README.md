@@ -14,11 +14,10 @@ git clone https://github.com/holtjma/starphase_pipeline.git
 cd starphase_pipeline
 ```
 2. Create a cohort file following the template provided in `./data/cohort_batches/template.tsv`. This requires populating the unique sample ID as well as the locations of the haplotagged BAM and phased VCF file. Note: the provided sample ID is expected to match the values inside the provided BAM and VCF.
-3. Modify `./scripts/PipelineConfig.py` to use local paths for the GRCh38 reference genome and your local [snakemake submission profile](https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles):
+3. The pipeline expects a reference FASTA file and [snakemake submission profile](https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles) to be located in the `./data` sub-folder. They can be soft-linked for ease-of-use:
 ```
-# Root config items
-SNAKEMAKE_PROFILE = '/path/to/profile'
-REFERENCE_FASTA = '/path/to/human_GRCh38_no_alt_analysis_set.fasta'
+ln -s {path_to_profile} ./data/snakemake_profile
+ln -s {path_to_reference} ./data/human_GRCh38_no_alt_analysis_set.fasta
 ```
   * This pipeline can be run on a local machine as well. If this is desired, the `snakemake` invocation inside `./scripts/RunCohortPipeline.py` can be modified for your local use case.
 4. Create and activate the provided conda environment:
