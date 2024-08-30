@@ -1,0 +1,6 @@
+name: starphase
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - pbstarphase=0.14.1

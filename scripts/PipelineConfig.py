@@ -1,0 +1,22 @@
+
+# TODO: can we derive any of these?
+# Root config items
+PROJECT_DIR = '/home/UNIXHOME/mholt/projects/starphase_runner'
+SNAKEMAKE_PROFILE = '/home/UNIXHOME/mholt/snakemake_profiles/slurm'
+STARPHASE_DATABASE = '/home/UNIXHOME/mholt/crates/pharmgoat/public/data/v0.14.1/pbstarphase_20240826.json.gz'
+REFERENCE_FASTA = '/pbi/collections/appslabht/reference/human_GRCh38_no_alt_analysis_set.fasta'
+
+#anything derived from the root config
+RULES_FOLDER = f'{PROJECT_DIR}/rules'
+ENV_FOLDER = f'{PROJECT_DIR}/conda_envs'
+PIPELINE_FOLDER = f'{PROJECT_DIR}/pipeline'
+DATA_FOLDER = f'{PROJECT_DIR}/data'
+RESULTS_FOLDER = f'{PROJECT_DIR}/results'
+SCRIPTS_FOLDER = f'{PROJECT_DIR}/scripts'
+
+SNAKEFILE = f'{RULES_FOLDER}/CohortPipeline.smk'
+
+# put all batch in these configs
+BATCH_FILES = [
+    f'{DATA_FOLDER}/cohort_batches/preprint_cohort.tsv'
+]
