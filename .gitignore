@@ -1,6 +1,5 @@
 *.err
 *.out
-data/cohort_batches
 pipeline
 scripts/.snakemake
 scripts/__pycache__

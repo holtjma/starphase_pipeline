@@ -1,0 +1,2 @@
+unique_id	phased_vcf	tagged_bam
+sample_1	/path/to/sample_1.vcf.gz	/path/to/sample_1.bam
