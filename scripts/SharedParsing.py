@@ -1,5 +1,6 @@
 
 import csv
+import glob
 
 from PipelineConfig import *
 
@@ -14,7 +15,14 @@ def load_batches():
     '''
     # return is a key -> row dictionary
     ret = {}
+
+    BATCH_FILES = sorted(glob.glob(f'{DATA_FOLDER}/cohort_batches/*.tsv'))
+
     for bf in BATCH_FILES:
+        if bf.split('/')[-1] == 'template.tsv':
+            # ignore the template file
+            continue
+
         print(f"Parsing {bf}...")
         fp = open(bf, 'r')
         tsv_reader = csv.DictReader(fp, delimiter='\t')

@@ -1,5 +1,6 @@
 # StarPhase cohort pipeline
-This repo contains a pipeline and collection of scripts to generate aggregate summary statistics for cohorts from different contributing sites.
+This repo contains a pipeline and collection of scripts to generate aggregate summary statistics the StarPhase publication.
+Contributing sites each run this pipeline on their local data files and then the aggregate summaries are collected to generate final figures.
 
 ## User instructions
 This cohort pipeline assumes you are operating in a cluster environment and have conda installed.
@@ -28,7 +29,10 @@ conda activate starphase_pipeline
 ```
 5. Run the full pipeline, which will produce the final cohort summary at `./pipeline/aggregate/aggregate_summary.tsv`:
 ```
-python3 ./scripts/RunCohortPipeline -Ax
+# dry-run of the pipeline
+python3 ./scripts/RunCohortPipeline.py -A
+# executes the commands
+python3 ./scripts/RunCohortPipeline.py -Ax
 ```
 6. Review `./pipeline/aggregate/aggregate_summary.tsv` which will have the following format:
 ```

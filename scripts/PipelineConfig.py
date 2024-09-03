@@ -16,8 +16,3 @@ SNAKEMAKE_PROFILE = f'{DATA_FOLDER}/snakemake_profile'
 REFERENCE_FASTA = f'{DATA_FOLDER}/human_GRCh38_no_alt_analysis_set.fasta'
 STARPHASE_DATABASE = f'{DATA_FOLDER}/starphase_db/v0.14.1/pbstarphase_20240826.json.gz'
 SNAKEFILE = f'{RULES_FOLDER}/CohortPipeline.smk'
-
-# put all batch in these configs
-BATCH_FILES = [
-    f'{DATA_FOLDER}/cohort_batches/preprint_cohort.tsv'
-]
