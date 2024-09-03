@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('AGG')
 import matplotlib.pyplot as plt
 
+from AggregateData import writeAggregateTsv
 from PipelineConfig import *
 
 #####################################################
@@ -515,6 +516,11 @@ if __name__ == '__main__':
     # first, load all the data into a single dict
     aggregate_files = glob.glob(f'{DATA_FOLDER}/cohort_aggregate_files/*.tsv')
     all_loaded_data = loadAllAggregateFiles(aggregate_files)
+
+    # save the combined aggregate to a file
+    aggregate_fn = f'{RESULTS_FOLDER}/combined_aggregate.tsv'
+    print(f'Saving combined aggregate to {aggregate_fn}...')
+    writeAggregateTsv(all_loaded_data, f'{RESULTS_FOLDER}/combined_aggregate.tsv')
     
     # consolidate everything by ancestry
     ancestry_collection = collectByAncestry(all_loaded_data, True)
