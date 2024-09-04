@@ -12,6 +12,7 @@ import json
 
 # controls whether we collect the HLA delta metrics, which loads a semi-large JSON
 ENABLE_HLA_DELTAS = True
+MIN_COVERAGE = 15.0
 
 #####################################################
 # Data loading
@@ -40,20 +41,34 @@ def loadCohortData(cohort_datasets):
     for k in cohort_datasets:
         print(f'\tLoading data for {k}...')
 
+        # first, load the coverage to determine if this dataset is getting filtered
+        mosdepth_prefix = cohort_datasets[k]['mosdepth_prefix']
+        mosdepth_summary_fn = f'{mosdepth_prefix}.mosdepth.summary.txt'
+        mean_coverage = loadMeanCoverage(mosdepth_summary_fn)
+        if mean_coverage < MIN_COVERAGE:
+            print(f'\t\tSkipping {k} => mean_coverage = {mean_coverage}')
+            continue
+        else:
+            print(f'\t\tmean_coverage = {mean_coverage}')
+
         # load the sex for the sample
         peddy_prefix = cohort_datasets[k]['peddy_prefix']
         peddy_sex_fn = f'{peddy_prefix}.sex_check.csv'
         sex = loadPeddySex(peddy_sex_fn)
+        print(f'\t\tPredicted sex = {sex}')
 
         # load the ancestry for the sample
         peddy_anc_fn = f'{peddy_prefix}.het_check.csv'
         (ancestry, anc_prob) = loadPeddyAncestry(peddy_anc_fn)
+        print(f'\t\tPredicted ancestry = {ancestry} ({anc_prob})')
 
         # load the StarPhase results
         starphase_prefix = cohort_datasets[k]['starphase_prefix']
-        diplotypes = loadStarphase(starphase_prefix)
+        starphase_fn = f'{starphase_prefix}.diplotypes.json'
+        diplotypes = loadStarphase(starphase_fn)
         if ENABLE_HLA_DELTAS:
-            hla_deltas = loadHlaDeltas(starphase_prefix, diplotypes)
+            starphase_debug_fn = f'{starphase_prefix}_debug/hla_debug.json'
+            hla_deltas = loadHlaDeltas(starphase_debug_fn, diplotypes)
         else:
             hla_deltas = {}
 
@@ -66,6 +81,25 @@ def loadCohortData(cohort_datasets):
             'hla_deltas' : hla_deltas
         }
     
+    return ret
+
+def loadMeanCoverage(fn):
+    '''
+    File format:
+    chrom	length	bases	mean	min	max
+    chr1	248956422	8709049892	34.98	0	21554
+    ...
+    total	3099813762	98832345199	31.88	0	35443
+    '''
+    ret = None
+    fp = open(fn, 'r')
+    tsv_reader = csv.DictReader(fp, delimiter='\t')
+    for row in tsv_reader:
+        if row['chrom'] == 'total':
+            ret = float(row['mean'])
+            break
+
+    fp.close()
     return ret
 
 def loadPeddySex(fn):
@@ -100,12 +134,11 @@ def loadPeddyAncestry(fn):
     fp.close()
     return (ancestry, anc_prob)
 
-def loadStarphase(prefix):
+def loadStarphase(data_fn):
     '''
     Loads all the starphase diplotype results
     '''
     # load the dict
-    data_fn = f'{prefix}.diplotypes.json'
     fp = open(data_fn, 'r')
     j = json.load(fp)
     fp.close()
@@ -119,12 +152,11 @@ def loadStarphase(prefix):
     # tie it to the sample
     return gene_results
 
-def loadHlaDeltas(prefix, diplotypes):
+def loadHlaDeltas(data_fn, diplotypes):
     '''
     This will load the match information for each haplotype so we can generate some metrics on identity to DB
     '''
     # load the dict
-    data_fn = f'{prefix}_debug/hla_debug.json'
     fp = open(data_fn, 'r')
     j = json.load(fp)
     fp.close()

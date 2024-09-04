@@ -40,11 +40,23 @@ def get_sample_id(wildcards):
 # Primary root rules
 #######################################################################
 
+def get_mosdepth_cohort():
+    ret = []
+    for sample in SAMPLE_METADATA:
+        # we just need the summary file
+        ret.append(f'{PIPELINE_FOLDER}/mosdepth/{sample}.mosdepth.summary.txt')
+    return ret
+
+rule mosdepth_cohort:
+    input:
+        get_mosdepth_cohort()
+
 def get_peddy_cohort():
     ret = []
     for sample in SAMPLE_METADATA:
-        # adding the HTML file triggers the rule to run
-        ret.append(f'{PIPELINE_FOLDER}/peddy/{sample}.html')
+        # add the two files we need, even though they come from the same rule
+        ret.append(f'{PIPELINE_FOLDER}/peddy/{sample}.het_check.csv')
+        ret.append(f'{PIPELINE_FOLDER}/peddy/{sample}.sex_check.csv')
     return ret
 
 rule peddy_cohort:
@@ -71,13 +83,15 @@ rule collation_file:
     log: f'{PIPELINE_FOLDER}/logs/collation/all_batches.log'
     shell: '''
         python3 {params.script} \
-            -o {output.tsv}
+            -o {output.tsv} \
+            > {log} 2>&1
     '''
 
 rule aggregate_summary:
     input:
         peddy_files=get_peddy_cohort(),
-        starphase_file=get_starphase_cohort(),
+        starphase_files=get_starphase_cohort(),
+        coverage_files=get_mosdepth_cohort(),
         tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
     output:
         tsv=f'{PIPELINE_FOLDER}/aggregate/aggregate_summary.tsv'
@@ -87,8 +101,38 @@ rule aggregate_summary:
     shell: '''
         python3 {params.script} \
             -i {input.tsv} \
-            -o {output.tsv}
+            -o {output.tsv} \
+            > {log} 2>&1
     '''
+
+#######################################################################
+# QC checks
+#######################################################################
+
+rule mosdepth:
+    input:
+        bam=get_bam_file
+    output:
+        summary="{pipeline}/mosdepth/{sample}.mosdepth.summary.txt",
+        dist="{pipeline}/mosdepth/{sample}.mosdepth.global.dist.txt"
+    params:
+        prefix="{pipeline}/mosdepth/{sample}"
+    resources:
+        mem_mb=8*1024,
+        runtime=2*60 #minutes
+    threads: 4
+    conda: f"{ENV_FOLDER}/mosdepth.yaml"
+    log: "{pipeline}/logs/mosdepth/{sample}.log"
+    benchmark: "{pipeline}/benchmark/mosdepth/{sample}.tsv"
+    shell: '''
+        mosdepth \
+            -n \
+            --threads {threads} \
+            --fast-mode \
+            {params.prefix} \
+            {input.bam} \
+            > {log} 2>&1
+        '''
 
 #######################################################################
 # Ancestry checks
@@ -99,7 +143,8 @@ rule peddy:
         vcf=get_phased_vcf_file
     output:
         ped="{pipeline}/peddy/{sample}.ped",
-        html="{pipeline}/peddy/{sample}.html",
+        het_check="{pipeline}/peddy/{sample}.het_check.csv",
+        sex_check="{pipeline}/peddy/{sample}.sex_check.csv",
         # TODO: there are other outputs, but we don't need to specify them since this is a one-of analysis
     params:
         prefix="{pipeline}/peddy/{sample}",
@@ -119,7 +164,8 @@ rule peddy:
             --sites {params.sites} \
             --prefix {params.prefix} \
             {input.vcf} \
-            {output.ped}
+            {output.ped} \
+            > {log} 2>&1
         '''
 
 #######################################################################
@@ -158,5 +204,6 @@ rule starphase_bam:
             --bam {input.bam} \
             --output-calls {output.json} \
             --pharmcat-tsv {output.pharmcat_tsv} \
-            --output-debug {output.debug_folder}
+            --output-debug {output.debug_folder} \
+            > {log} 2>&1
         '''

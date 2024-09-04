@@ -2,11 +2,19 @@
 This repo contains a pipeline and collection of scripts to generate aggregate summary statistics the StarPhase publication.
 Contributing sites each run this pipeline on their local data files and then the aggregate summaries are collected to generate final figures.
 
+## Pipeline overview
+At a high level, the pipeline performs the following core steps:
+
+1. `mosdepth` - Run on individual datasets. This generates summary coverage statistics that are used to filter out low coverage datasets. This tends to be the most computationally expensive step of the whole pipeline.
+2. `peddy` - Run on individual datasets. This generates summary ancestry and sex predictions for the datasets.
+3. `pbstarphase` - Run on individual datasets. This generates the PGx diplotype calls of interest.
+4. Aggregation script - Run on the full cohort. This loads all the other output files, filters out low coverage datasets, and then aggregates PGx diplotype calls based on predicted ancestry and sex. The final output will be located in `./pipeline/aggregate/aggregate_summary.tsv`.
+
 ## User instructions
 This cohort pipeline assumes you are operating in a cluster environment and have conda installed.
 To install conda, we recommend the [Bioconda setup instructions](https://bioconda.github.io).
 
-### Generating a cohort summary
+### Running the pipeline
 This is the main process for generating anonymized, ancestry-level aggregate statistics from a cohort.
 
 1. Clone this repository to your local compute infrastructure:

@@ -17,6 +17,7 @@ if __name__ == '__main__':
 
     #things we want to generate
     p.add_argument('-s', '--starphase-cohort', dest='starphase_cohort', action='store_true', default=False, help='generate the StarPhase cohort results (default: False)')
+    p.add_argument('-m', '--mosdepth-cohort', dest='mosdepth_cohort', action='store_true', default=False, help='generate the Mosdepth cohort results (default: False)')
     p.add_argument('-p', '--peddy-cohort', dest='peddy_cohort', action='store_true', default=False, help='generate the Peddy cohort results (default: False)')
     p.add_argument('-c', '--cohort-file', dest='cohort_file', action='store_true', default=False, help='generate the cohort file for final collation (default: False)')
     p.add_argument('-a', '--aggregate-summary', dest='aggregate_summary', action='store_true', default=False, help='generate the aggregate summary file (default: False)')
@@ -29,6 +30,9 @@ if __name__ == '__main__':
     if args.target_all or args.starphase_cohort:
         targets.append('starphase_cohort')
 
+    if args.target_all or args.mosdepth_cohort:
+        targets.append('mosdepth_cohort')
+
     if args.target_all or args.peddy_cohort:
         targets.append('peddy_cohort')
 
@@ -40,14 +44,13 @@ if __name__ == '__main__':
     
     snakemake_frags = [
         'snakemake',
-        #standard options
+        # standard options
         '--printshellcmds',
         '--keep-going',
         '--use-conda',
-        #'--use-singularity', '--singularity-args "-B /pbi -B /home --cleanenv"',
-        '--jobs', '1000',
-        #things we need to pass/configure
-        '--profile', SNAKEMAKE_PROFILE,
+        # '--use-singularity', '--singularity-args "-B /pbi -B /home --cleanenv"',
+        # things we need to pass/configure
+        '--profile', SNAKEMAKE_PROFILE, # profiles are from before the v8 plugin, many of which are WIP
         '--snakefile', SNAKEFILE
     ]
 

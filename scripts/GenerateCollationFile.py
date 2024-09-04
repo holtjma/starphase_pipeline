@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # open the TSV file, which just needs the prefixes
     fp = open(args.output_tsv, 'w+')
     tsv_writer = csv.DictWriter(fp, delimiter='\t', fieldnames=[
-        'unique_id', 'starphase_prefix', 'peddy_prefix'
+        'unique_id', 'starphase_prefix', 'peddy_prefix', 'mosdepth_prefix'
     ])
     tsv_writer.writeheader()
 
@@ -33,7 +33,8 @@ if __name__ == '__main__':
         row = {
             'unique_id' : sample_id,
             'starphase_prefix' : f'{PIPELINE_FOLDER}/starphase/{sample_id}',
-            'peddy_prefix' : f'{PIPELINE_FOLDER}/peddy/{sample_id}'
+            'peddy_prefix' : f'{PIPELINE_FOLDER}/peddy/{sample_id}',
+            'mosdepth_prefix' : f'{PIPELINE_FOLDER}/mosdepth/{sample_id}'
         }
         tsv_writer.writerow(row)
 
