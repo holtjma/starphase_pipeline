@@ -4,6 +4,8 @@ Final analysis file that loads all aggregated data files and generates all outpu
 
 import csv
 import glob
+import gzip
+import json
 import numpy as np
 import os
 
@@ -224,6 +226,18 @@ def reduceCyp2d6Hap(hap):
         reduc.append('*' + 'x'.join(copy_frags))
     return ' + '.join(reduc)
 
+def decomposeCyp2d6Hap(hap):
+    '''
+    This will return a set of all observed allele in a D6 haplotype
+    '''
+    d6_frags = hap.split(' + ')
+    reduc = []
+    for frag in d6_frags:
+        copy_frags = frag.split('x')
+        assert(len(copy_frags) <= 2)
+        reduc.append(copy_frags[0]) # if it is *4x2, we just want the *4 component
+    return set(reduc)
+
 def reduceCyp2d6CN(hap):
     '''
     Parses a haplotype into full allele and hybrid counts
@@ -389,7 +403,7 @@ def generateAncestryPlots(ancestry_data):
     if not os.path.exists(image_folder):
         os.makedirs(image_folder)
     
-    print(f'Generating images at {image_folder}...')
+    print(f'Generating ancestry images at {image_folder}...')
 
     for gene in sorted(ancestry_data.keys()):
         print(f'\tCreating image for {gene}...')
@@ -510,7 +524,141 @@ def generateAncestryPlots(ancestry_data):
         plt.savefig(f'{image_folder}/{gene}_distribution.png', bbox_inches='tight')
         plt.close()
     
-    print('Image generation complete.')
+    print('Ancestry image generation complete.')
+
+def loadDatabaseHaplotypes(fn, reduce_to_core):
+    '''
+    Loads our database haplotype set for each gene.
+    '''
+    fp = gzip.open(fn, 'r')
+    j = json.load(fp)
+    fp.close()
+
+    ret = {}
+    for gene in j['gene_entries']:
+        hap_dict = j['gene_entries'][gene]['defined_haplotypes']
+        hap_set = set(hap_dict.keys())
+        ret[gene] = hap_set
+
+    # now do HLA
+    ret['HLA-A'] = set([])
+    ret['HLA-B'] = set([])
+    for hap_id in j['hla_sequences']:
+        gene = j['hla_sequences'][hap_id]['gene_name']
+        star_allele = '*'+':'.join(j['hla_sequences'][hap_id]['star_allele'])
+        if reduce_to_core:
+            star_allele = reduceHlaHap(star_allele)
+        ret[gene].add(star_allele)
+
+    # lastly, CYP2D6; we manually add the ones that are not built into the DB, hybrids & deletions
+    ret['CYP2D6'] = set([
+        '*5', # deletion
+        '*13', '*61', '*63', '*68' # hybrids annotated in StarPhase
+    ])
+    for raw_allele in j['cyp2d6_gene_def'].keys():
+        # strip the prefix
+        assert(raw_allele.startswith('CYP2D6*'))
+        allele = raw_allele[6:]
+
+        # reduce if needed and add
+        if reduce_to_core:
+            allele = reduceCyp2d6Hap(allele)
+        ret['CYP2D6'].add(allele)
+    
+    return ret
+
+def generateDbRep(db_haps, ancestry_data):
+    '''
+    Compares the DB size to our observations to see how many alleles we have observed
+    @param db_haps - [gene] -> set of haplotypes in DB
+    @param ancestry_data - [gene][ancestry][hap] -> count
+    '''
+    debug = False
+    gene_order = sorted(db_haps.keys())
+    gene_labels = []
+    observed_fractions = []
+    observed_counts = []
+    missing_counts = []
+    total_observations = []
+    for gene in gene_order:
+        # build the sets
+        db_gene = db_haps[gene]
+        obs_gene = set([])
+        total_obs = 0
+        for anc in ancestry_data[gene]:
+            if gene == 'CYP2D6':
+                for haplotype in ancestry_data[gene][anc].keys():
+                    # split the haplotype into individual alleles
+                    allele_composition = decomposeCyp2d6Hap(haplotype)
+                    obs_gene |= allele_composition
+            else:
+                obs_gene |= set(ancestry_data[gene][anc].keys())
+            
+            for h in ancestry_data[gene][anc]:
+                total_obs += ancestry_data[gene][anc][h]
+
+        # calculate overlaps
+        shared = db_gene & obs_gene
+        missing = db_gene - obs_gene
+        unknown = obs_gene - db_gene
+        frac_shared = 100.0 * len(shared) / len(db_gene)
+        
+        # output and verify everything we observe is known
+        if debug:
+            print(gene, total_obs, f'{frac_shared:.2f}', len(shared), len(missing), len(unknown), sep='\t')
+
+        if len(unknown) > 0 and unknown != set(['NO_MATCH']):
+            # if this happens, we may need to encode more D6 haplotypes
+            # OR if someone ran it with a wrong DB, we could get weird mismatches
+            print('Unknown:', unknown)
+            raise Exception('Unknown haps encountered')
+        
+        # save the data for plotting
+        observed_fractions.append(frac_shared)
+        observed_counts.append(len(shared))
+        missing_counts.append(len(missing))
+        total_observations.append(total_obs)
+    
+    # we just have observed and unobserved
+    plt.figure()
+    first_bar = plt.bar(gene_order, observed_counts, width=0.6, label='Observed')
+    last_bar = plt.bar(gene_order, missing_counts, width=0.6, label='Unobserved', bottom=observed_counts)
+
+    # add text fraction overlay
+    for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
+        # X-offset, can be derived (less precise) or fixed by enumerate
+        # offset = fb.get_x() + fb.get_width() + 0.1 # shift it right a little
+        offset = i + 0.4
+
+        # Y-offset, a few options here
+        # placed at the top - gets cut off
+        height = fb.get_height() + lb.get_height()
+        
+        # constant at the bottom
+        # height = 0.1
+
+        # use this is bottom anchored
+        # text = f'{obs_frac:6.1f}%'
+        text = f' {obs_frac:.1f}%'
+        # plt.text(offset, height, text, ha='right', va='bottom', rotation='vertical')
+        plt.annotate(text, (offset, height), ha='right', va='bottom', rotation='vertical', annotation_clip=False)
+
+    plt.xticks(rotation=80)
+    plt.grid(axis='y')
+    plt.yscale('symlog')
+    plt.ylim([0, 30000]) # hard-coded just to make the numbers fit in the axis
+    plt.ylabel('Number of alleles in database')
+    plt.title('Alleles observed in cohort')
+
+    max_obs = max(total_observations)
+    plt.axhline(y=max_obs, linestyle='--', label='Cohort limit')
+
+    plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left')
+
+    out_fn = f'{RESULTS_FOLDER}/observed_haps.png'
+    print(f'Saving figure to {out_fn}...')
+    plt.savefig(out_fn, bbox_inches='tight')
+    plt.close()
 
 if __name__ == '__main__':
     # first, load all the data into a single dict
@@ -523,7 +671,14 @@ if __name__ == '__main__':
     writeAggregateTsv(all_loaded_data, f'{RESULTS_FOLDER}/combined_aggregate.tsv')
     
     # consolidate everything by ancestry
-    ancestry_collection = collectByAncestry(all_loaded_data, True)
+    reduce_to_core = True
+    ancestry_collection = collectByAncestry(all_loaded_data, reduce_to_core)
 
     # now generate ancestry images
     generateAncestryPlots(ancestry_collection)
+
+    # now lets look at database representation
+    database_fn = f'{DATA_FOLDER}/starphase_db/v0.14.1/pbstarphase_20240826.json.gz'
+    db_haps = loadDatabaseHaplotypes(database_fn, reduce_to_core)
+
+    generateDbRep(db_haps, ancestry_collection)
