@@ -621,18 +621,21 @@ def generateDbRep(db_haps, ancestry_data):
     
     # we just have observed and unobserved
     plt.figure()
-    first_bar = plt.bar(gene_order, observed_counts, width=0.6, label='Observed')
-    last_bar = plt.bar(gene_order, missing_counts, width=0.6, label='Unobserved', bottom=observed_counts)
+    width = 0.3
+    ind = np.arange(len(gene_order))
+
+    first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed')
+    last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved') #, bottom=observed_counts)
 
     # add text fraction overlay
     for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
         # X-offset, can be derived (less precise) or fixed by enumerate
         # offset = fb.get_x() + fb.get_width() + 0.1 # shift it right a little
-        offset = i + 0.4
+        offset = i + width + 0.1
 
         # Y-offset, a few options here
         # placed at the top - gets cut off
-        height = fb.get_height() + lb.get_height()
+        height = max(fb.get_height(), lb.get_height())
         
         # constant at the bottom
         # height = 0.1
@@ -643,10 +646,10 @@ def generateDbRep(db_haps, ancestry_data):
         # plt.text(offset, height, text, ha='right', va='bottom', rotation='vertical')
         plt.annotate(text, (offset, height), ha='right', va='bottom', rotation='vertical', annotation_clip=False)
 
-    plt.xticks(rotation=80)
+    plt.xticks(ind, gene_order, rotation=80)
     plt.grid(axis='y')
     plt.yscale('symlog')
-    plt.ylim([0, 30000]) # hard-coded just to make the numbers fit in the axis
+    plt.ylim([0, 25000]) # hard-coded just to make the numbers fit in the axis
     plt.ylabel('Number of alleles in database')
     plt.title('Alleles observed in cohort')
 
