@@ -116,7 +116,8 @@ rule mosdepth:
         summary="{pipeline}/mosdepth/{sample}.mosdepth.summary.txt",
         dist="{pipeline}/mosdepth/{sample}.mosdepth.global.dist.txt"
     params:
-        prefix="{pipeline}/mosdepth/{sample}"
+        prefix="{pipeline}/mosdepth/{sample}",
+        chrom="chr1" # we just need a rough estimate to rule out really low coverage, chr1 will do
     resources:
         mem_mb=8*1024,
         runtime=2*60 #minutes
@@ -129,6 +130,7 @@ rule mosdepth:
             -n \
             --threads {threads} \
             --fast-mode \
+            --chrom {params.chrom} \
             {params.prefix} \
             {input.bam} \
             > {log} 2>&1
