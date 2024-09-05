@@ -650,8 +650,8 @@ def generateDbRep(db_haps, ancestry_data):
     plt.grid(axis='y')
     plt.yscale('symlog')
     plt.ylim([0, 25000]) # hard-coded just to make the numbers fit in the axis
-    plt.ylabel('Number of alleles in database')
-    plt.title('Alleles observed in cohort')
+    plt.ylabel('Allele count')
+    plt.title('Percentage of database alleles observed in cohort')
 
     max_obs = max(total_observations)
     plt.axhline(y=max_obs, linestyle='--', label='Cohort limit')
