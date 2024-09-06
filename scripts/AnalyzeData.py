@@ -510,6 +510,8 @@ def generateAncestryPlots(ancestry_data):
             title = f'Haplotype distribution for {gene} by ancestry'
             legend_title = 'Top haplotypes'
 
+        ax = plt.gca()
+        ax.set_axisbelow(True)
         plt.grid(axis='y')
         # plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left') # anchors to right side
         plt.legend(title=legend_title, bbox_to_anchor=(1.0, 0.5), loc='center left')
@@ -647,6 +649,8 @@ def generateDbRep(db_haps, ancestry_data):
         plt.annotate(text, (offset, height), ha='right', va='bottom', rotation='vertical', annotation_clip=False)
 
     plt.xticks(ind, gene_order, rotation=80)
+    ax = plt.gca()
+    ax.set_axisbelow(True)
     plt.grid(axis='y')
     plt.yscale('symlog')
     plt.ylim([0, 25000]) # hard-coded just to make the numbers fit in the axis
