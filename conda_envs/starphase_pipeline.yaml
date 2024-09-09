@@ -7,3 +7,4 @@ dependencies:
   - snakemake=7.12.1
   - tabulate=0.8.10
   - matplotlib=3.5.3
+  - mamba=1.5.9
