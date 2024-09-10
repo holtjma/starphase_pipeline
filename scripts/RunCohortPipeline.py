@@ -22,6 +22,11 @@ if __name__ == '__main__':
     p.add_argument('-c', '--cohort-file', dest='cohort_file', action='store_true', default=False, help='generate the cohort file for final collation (default: False)')
     p.add_argument('-a', '--aggregate-summary', dest='aggregate_summary', action='store_true', default=False, help='generate the aggregate summary file (default: False)')
     
+    # run conditions, will either be a profile or a local job count
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument('--profile', dest='profile', default=None, help='run the commands using a provided snakemake profile')
+    group.add_argument('--cores', dest='cores', default=None, help='run the commands using the local machine with {CORES} processes')
+
     args = p.parse_args()
 
     #generate all the targets from the above commands
@@ -50,9 +55,16 @@ if __name__ == '__main__':
         '--use-conda',
         # '--use-singularity', '--singularity-args "-B /pbi -B /home --cleanenv"',
         # things we need to pass/configure
-        '--profile', SNAKEMAKE_PROFILE, # profiles are from before the v8 plugin, many of which are WIP
+        # '--profile', SNAKEMAKE_PROFILE, # profiles are from before the v8 plugin, many of which are WIP
         '--snakefile', SNAKEFILE
     ]
+
+    if args.profile != None:
+        snakemake_frags += ['--profile', args.profile]
+    elif args.cores != None:
+        snakemake_frags += ['--cores', args.cores]
+    else:
+        raise Exception('Either profile or job count must be specified')
 
     if not args.execute:
         print('Dry run only: enabled')

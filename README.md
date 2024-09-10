@@ -13,6 +13,7 @@ At a high level, the pipeline performs the following core steps:
 ## User instructions
 This cohort pipeline assumes you are operating in a cluster environment and have conda installed.
 To install conda, we recommend the [Bioconda setup instructions](https://bioconda.github.io).
+Mamba is also a viable alternative.
 
 ### Running the pipeline
 This is the main process for generating anonymized, ancestry-level aggregate statistics from a cohort.
@@ -22,27 +23,28 @@ This is the main process for generating anonymized, ancestry-level aggregate sta
 git clone https://github.com/holtjma/starphase_pipeline.git
 cd starphase_pipeline
 ```
-2. Create a cohort file following the template provided in `./data/cohort_batches/template.tsv`. This requires populating the unique sample ID as well as the locations of the haplotagged BAM and phased VCF file. Note: the provided sample ID is expected to match the values inside the provided BAM and VCF.
-3. The pipeline expects a reference FASTA file and [snakemake submission profile](https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles) to be located in the `./data` sub-folder. They can be soft-linked for ease-of-use:
+2. Create the cohort file following the template provided in `./data/cohort_batches/template.tsv`. Note this must be saved to a different file. This requires populating the unique sample ID as well as the locations of the haplotagged BAM and phased VCF file. The provided sample ID is expected to match the values inside the provided BAM and VCF.
+3. The pipeline expects a reference FASTA file to be located in the `./data` sub-folder. It can be soft-linked for ease-of-use:
 ```
-ln -s {path_to_profile} ./data/snakemake_profile
 ln -s {path_to_reference} ./data/human_GRCh38_no_alt_analysis_set.fasta
 ```
-  * This pipeline can be run on a local machine as well. If this is desired, the `snakemake` invocation inside `./scripts/RunCohortPipeline.py` can be modified for your local use case.
 4. Create and activate the provided conda environment:
 ```
 conda env create --name starphase_pipeline --file ./conda_envs/starphase_pipeline.yaml
 # follow prompts to install the environment
 conda activate starphase_pipeline
 ```
-5. Run the full pipeline, which will produce the final cohort summary at `./pipeline/aggregate/aggregate_summary.tsv`:
+5. Set up the run conditions for snakemake. There are two options:
+  * **Recommended**: Set up a snakemake profile for your compute environment. Several templates are provided on [snakemake submission profile](https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles). This is provided via the `--profile {SNAKEMAKE_PROFILE}` option, and passed through to the snakemake invocation.
+  * Alternate: This pipeline can be run on a single machine as well by specifying `--cores {CORES}` instead of a snakemake profile. While this is easier to set up, it forces all work onto a single machine which may be slow for larger cohorts. This is option is passed through to the snakemake invocation.
+6. Run the full pipeline, which will produce the final cohort summary at `./pipeline/aggregate/aggregate_summary.tsv`:
 ```
 # dry-run of the pipeline
-python3 ./scripts/RunCohortPipeline.py -A
+python3 ./scripts/RunCohortPipeline.py --profile {SNAKEMAKE_PROFILE} -A
 # executes the commands
-python3 ./scripts/RunCohortPipeline.py -Ax
+python3 ./scripts/RunCohortPipeline.py --profile {SNAKEMAKE_PROFILE} -Ax 
 ```
-6. Review `./pipeline/aggregate/aggregate_summary.tsv` which will have the following format:
+7. Review `./pipeline/aggregate/aggregate_summary.tsv` which will have the following format:
 ```
 gene	ancestry	sex	starphase_diplotype	count
 ABCG2	AFR	female	rs2231142 reference (G)/rs2231142 reference (G)	33
