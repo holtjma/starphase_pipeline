@@ -1,5 +1,6 @@
 
 import csv
+import glob
 
 # get at the PipelineConfig
 import sys
@@ -74,8 +75,15 @@ rule starphase_cohort:
     input:
         get_starphase_cohort()
 
+def get_batch_files():
+    batch_files = sorted(glob.glob(f'{DATA_FOLDER}/cohort_batches/*.tsv'))
+    # template.tsv is in here, but that shouldn't be a problem
+    return batch_files
+
 # The next two rules run fast and could be localrules, but we want to capture the logs in the event of failure
 rule collation_file:
+    input:
+        batch_files=get_batch_files()
     output:
         tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
     params:
