@@ -3,4 +3,4 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - pbstarphase=0.14.1
+  - pbstarphase=0.14.2
