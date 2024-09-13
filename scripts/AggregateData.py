@@ -33,6 +33,54 @@ def loadInputTsv(fn):
     fp.close()
     return ret
 
+def filterRelatedSamples(fn, cutoff):
+    '''
+    Parses our relationship file and returns a semi-optimal set of samples we should remove to cut out relationships.
+    '''
+    print('Checking relationship metrics...')
+    fp = open(fn, 'r')
+    tsv_reader = csv.DictReader(fp, delimiter='\t')
+    relations = {}
+    for row in tsv_reader:
+        relatedness = float(row['relatedness'])
+        if relatedness >= cutoff:
+            sample_a = row['#sample_a']
+            sample_b = row['sample_b']
+
+            if sample_a not in relations:
+                relations[sample_a] = set([])
+            relations[sample_a].add(sample_b)
+            
+            if sample_b not in relations:
+                relations[sample_b] = set([])
+            relations[sample_b].add(sample_a)
+    fp.close()
+
+    # now go through and remove samples based on the number of connections they have
+    # theoretically, a "trio" set should remove just the child in this setup
+    # in a "duo", it will be one of the two (earlier sample name is tie-breaker)
+    filtered_set = set([])
+    while True:
+        max_relat = 0
+        max_sample = None
+
+        # sorted just does a fixed ordering
+        for k in sorted(relations.keys()):
+            if len(relations[k]) > max_relat:
+                max_relat = len(relations[k])
+                max_sample = k
+        
+        if max_relat == 0:
+            break
+
+        print(f'\tFiltering {max_sample} with {max_relat} relatives detected: {relations[max_sample]}')
+        filtered_set.add(max_sample)
+        for relative in relations[max_sample]:
+            relations[relative].remove(max_sample)
+        del relations[max_sample]
+
+    return filtered_set
+
 def loadCohortData(cohort_datasets):
     '''
     This will load all of the sample data for the cohort
@@ -307,6 +355,7 @@ if __name__ == '__main__':
 
     p.add_argument('-i', '--input-tsv', dest='input_tsv', required=True, help='the input collation file (TSV)')
     p.add_argument('-o', '--output-tsv', dest='output_tsv', required=True, help='the output aggregate file (TSV)')
+    p.add_argument('-r', '--relationship-tsv', dest='relationship_tsv', default=None, help='relationship somalier file to filter (TSV)')
     
     args = p.parse_args()
 
@@ -314,6 +363,16 @@ if __name__ == '__main__':
     print(f'Loading input collation file {args.input_tsv}...')
     data_collection = loadInputTsv(args.input_tsv)
 
+    if args.relationship_tsv != None:
+        max_related = 0.20 # should catch 1st & 2nd-degree relatives
+        filter_set = filterRelatedSamples(args.relationship_tsv, max_related)
+    else:
+        filter_set = set([])
+
+    # remove all relatives here
+    for sample in filter_set:
+        del data_collection[sample]
+    
     # now load the actual data
     print('Loading all data files...')
     sample_data = loadCohortData(data_collection)

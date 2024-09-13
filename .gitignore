@@ -1,7 +1,7 @@
 *.err
 *.out
 .snakemake
-data/human_GRCh38_no_alt_analysis_set.fasta
+data/human_GRCh38_no_alt_analysis_set.fasta*
 data/snakemake_profile
 pipeline
 scripts/.snakemake

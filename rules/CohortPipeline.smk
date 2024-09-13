@@ -64,6 +64,22 @@ rule peddy_cohort:
     input:
         get_peddy_cohort()
 
+def get_somalier_files():
+    ret = []
+    for sample in SAMPLE_METADATA:
+        ret.append(f'{PIPELINE_FOLDER}/somalier/{sample}.somalier')
+    return ret
+
+def get_somalier_cohort():
+    ret = [
+        f'{PIPELINE_FOLDER}/somalier_relate/all_batches.pairs.tsv'
+    ]
+    return ret
+
+rule somalier_cohort:
+    input:
+        get_somalier_cohort()
+
 def get_starphase_cohort():
     ret = []
     for sample in SAMPLE_METADATA:
@@ -100,6 +116,7 @@ rule aggregate_summary:
         peddy_files=get_peddy_cohort(),
         starphase_files=get_starphase_cohort(),
         coverage_files=get_mosdepth_cohort(),
+        relationship_file=f'{PIPELINE_FOLDER}/somalier_relate/all_batches.pairs.tsv',
         tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
     output:
         tsv=f'{PIPELINE_FOLDER}/aggregate/aggregate_summary.tsv'
@@ -109,6 +126,7 @@ rule aggregate_summary:
     shell: '''
         python3 {params.script} \
             -i {input.tsv} \
+            -r {input.relationship_file} \
             -o {output.tsv} \
             > {log} 2>&1
     '''
@@ -176,6 +194,51 @@ rule peddy:
             {input.vcf} \
             {output.ped} \
             > {log} 2>&1
+        '''
+
+rule somalier:
+    input:
+        reference=REFERENCE_FASTA,
+        bam=get_bam_file
+    output:
+        somalier="{pipeline}/somalier/{sample}.somalier"
+    params:
+        out_dir="{pipeline}/somalier",
+        sites=f'{DATA_FOLDER}/somalier/sites.hg38.vcf.gz'
+    resources:
+        mem_mb=2*1024,
+        runtime=20 #minutes
+    threads: 1
+    conda: f"{ENV_FOLDER}/somalier.yaml"
+    log: "{pipeline}/logs/somalier/{sample}.log"
+    benchmark: "{pipeline}/benchmark/somalier/{sample}.log"
+    shell: '''
+        somalier extract \
+            --fasta {input.reference} \
+            --out-dir {params.out_dir} \
+            --sites {params.sites} \
+            {input.bam}
+        '''
+
+rule somalier_relate:
+    input:
+        somalier_files=get_somalier_files()
+    output:
+        pairs="{pipeline}/somalier_relate/all_batches.pairs.tsv"
+    params:
+        out_prefix="{pipeline}/somalier_relate/all_batches"
+    resources:
+        mem_mb=8*1024,
+        runtime=60 #minutes
+    threads: 1
+    conda: f"{ENV_FOLDER}/somalier.yaml"
+    log: "{pipeline}/logs/somalier_relate/all_batches.log"
+    benchmark: "{pipeline}/benchmark/somalier_relate/all_batches.log"
+    shell: '''
+        somalier relate \
+            --infer \
+            --output-prefix {params.out_prefix} \
+            {input.somalier_files}
         '''
 
 #######################################################################

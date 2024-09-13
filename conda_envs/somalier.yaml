@@ -1,0 +1,6 @@
+name: somalier
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - somalier=0.2.19

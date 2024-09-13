@@ -24,9 +24,10 @@ git clone https://github.com/holtjma/starphase_pipeline.git
 cd starphase_pipeline
 ```
 2. Create the cohort file following the template provided in `./data/cohort_batches/template.tsv`. Note this must be saved to a different file. This requires populating the unique sample ID as well as the locations of the haplotagged BAM and phased VCF file. The provided sample ID is expected to match the values inside the provided BAM and VCF.
-3. The pipeline expects a reference FASTA file to be located in the `./data` sub-folder. It can be soft-linked for ease-of-use:
+3. The pipeline expects a reference FASTA file with an index to be located in the `./data` sub-folder. It can be soft-linked for ease-of-use:
 ```
 ln -s {path_to_reference} ./data/human_GRCh38_no_alt_analysis_set.fasta
+ln -s {path_to_reference}.fai ./data/human_GRCh38_no_alt_analysis_set.fasta.fai
 ```
 4. Create and activate the provided conda environment:
 ```

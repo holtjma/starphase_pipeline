@@ -19,6 +19,7 @@ if __name__ == '__main__':
     p.add_argument('-s', '--starphase-cohort', dest='starphase_cohort', action='store_true', default=False, help='generate the StarPhase cohort results (default: False)')
     p.add_argument('-m', '--mosdepth-cohort', dest='mosdepth_cohort', action='store_true', default=False, help='generate the Mosdepth cohort results (default: False)')
     p.add_argument('-p', '--peddy-cohort', dest='peddy_cohort', action='store_true', default=False, help='generate the Peddy cohort results (default: False)')
+    p.add_argument('-S', '--somalier-cohort', dest='somalier_cohort', action='store_true', default=False, help='generate the somalier cohort results (default: False)')
     p.add_argument('-c', '--cohort-file', dest='cohort_file', action='store_true', default=False, help='generate the cohort file for final collation (default: False)')
     p.add_argument('-a', '--aggregate-summary', dest='aggregate_summary', action='store_true', default=False, help='generate the aggregate summary file (default: False)')
     
@@ -40,6 +41,9 @@ if __name__ == '__main__':
 
     if args.target_all or args.peddy_cohort:
         targets.append('peddy_cohort')
+    
+    if args.target_all or args.somalier_cohort:
+        targets.append('somalier_cohort')
 
     if args.target_all or args.cohort_file:
         targets.append('collation_file')
