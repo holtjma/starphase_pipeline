@@ -288,6 +288,9 @@ def scoreCyp2d6(hap, impact_mode):
     '''
     d6_frags = hap.split(' + ')
     impacts = []
+
+    # first interate over the haplotypes and combine those with the same base integer label; e.g. *1.001 + *1.002 = *1x2
+    hap_copy = {}
     for frag in d6_frags:
         copy_frags = frag.split('x')
         assert(len(copy_frags) <= 2)
@@ -300,17 +303,26 @@ def scoreCyp2d6(hap, impact_mode):
             copy_count = int(copy_frags[1])
         else:
             copy_count = 1
+        
+        hap_copy[int_val] = hap_copy.get(int_val, 0) + copy_count
+    
+    # now go through the counts and add the impact values
+    for int_val in hap_copy:
+        copy_count = hap_copy[int_val]
 
-        if copy_count >= 3:
+        if copy_count == 1:
+            frag_lookup = f'*{int_val}'
+        elif copy_count == 2:
+            frag_lookup = f'*{int_val}x2'
+        elif copy_count >= 3:
             # special matching here
             frag_lookup = f'*{int_val}x≥3'
         else:
-            # normal system with x2
-            copy_frags[0] = str(int_val)
-            frag_lookup = '*' + 'x'.join(copy_frags)
+            raise Exception(f'unhandled copy_count={copy_count}')
 
         impacts.append(D6_IMPACT_VALUES[frag_lookup])
     
+    # if we have more than one impact, make sure that all the others are defunct
     if len(impacts) > 1:
         # see if we can filter down the impacts to something easy by removing all defunct ones
         filtered_impacts = []
@@ -609,7 +621,7 @@ def generateDbRep(db_haps, ancestry_data):
         if debug:
             print(gene, total_obs, f'{frac_shared:.2f}', len(shared), len(missing), len(unknown), sep='\t')
 
-        if len(unknown) > 0 and unknown != set(['NO_MATCH']):
+        if len(unknown) > 0 and unknown != set(['NO_MATCH']) and unknown != set(['NO_MATCH', 'heteroplasmy']):
             # if this happens, we may need to encode more D6 haplotypes
             # OR if someone ran it with a wrong DB, we could get weird mismatches
             print('Unknown:', unknown)
