@@ -65,6 +65,51 @@ def loadD6Impact():
 
 D6_IMPACT_VALUES = loadD6Impact()
 
+def loadPopFreq(pop_freq_folder):
+    '''
+    Loads the population frequency information from the AllOfUs v7 populations.
+    Indeterminate haplotypes are ignored and removed from the frequency count.
+    Return values is a dict[gene][ancestry/"ALL"][allele/"TOTAL"] => count.
+    @param pop_freq_folder - the "AllOfUs_Frequencies_v7/allele" folder path
+    '''
+    ret = {}
+
+    filenames = sorted(glob.glob(f'{pop_freq_folder}/*_allele.tsv'))
+    for fn in filenames:
+        gene = fn.split('/')[-1][:-11]
+        gene_vals = {}
+        all_anc = {
+            'TOTAL' : 0
+        }
+
+        fp = open(fn, 'r')
+        tsv_reader = csv.DictReader(fp, delimiter='\t')
+        for row in tsv_reader:
+            anc = row['biogeographic_group'].upper()
+            allele = row['allele']
+            if allele == 'Indeterminate':
+                # ignore these
+                continue
+            hap_count = int(row['n_haplotype'])
+
+            if anc not in gene_vals:
+                gene_vals[anc] = {
+                    'TOTAL' : 0
+                }
+            assert(allele not in gene_vals[anc])
+
+            #add the counts for the ancestry and the totals
+            gene_vals[anc][allele] = hap_count
+            gene_vals[anc]['TOTAL'] += hap_count
+            all_anc[allele] = all_anc.get(allele, 0) + hap_count
+            all_anc['TOTAL'] += hap_count
+        
+        gene_vals['ALL'] = all_anc
+        ret[gene] = gene_vals
+        fp.close()
+
+    return ret
+
 #####################################################
 # Data loading
 #####################################################
@@ -406,16 +451,21 @@ def categoryHlaDelta(delta_value):
 # Data analysis / visualization
 #####################################################
 
-def generateAncestryPlots(ancestry_data):
+def generateAncestryPlots(ancestry_data, popfreqs):
     '''
     This is where we can create a bunch of plots
-    @param ancestry_data - [gene][ancestry][hap] -> count
+    @param ancestry_data - dict[gene][ancestry][hap] -> count
+    @param popfreqs - dict[gene][ancestry/"ALL"][allele/"TOTAL"] => count
     '''
     image_folder = f'{RESULTS_FOLDER}/ancestry_images'
     if not os.path.exists(image_folder):
         os.makedirs(image_folder)
     
     print(f'Generating ancestry images at {image_folder}...')
+
+    # get the default color cycle
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
 
     for gene in sorted(ancestry_data.keys()):
         print(f'\tCreating image for {gene}...')
@@ -452,6 +502,8 @@ def generateAncestryPlots(ancestry_data):
         # figure out if we need to restrict our display
         max_colors = 20 # max number of categories
         cycle_length = 10 # if greater than this, we add a hatch
+        assert(cycle_length == len(colors))
+
         if len(ordered_keys) > max_colors:
             # we need to truncate to 9, and then have an "everything else"
             low_values = ordered_keys[max_colors-1:]
@@ -460,15 +512,25 @@ def generateAncestryPlots(ancestry_data):
             other_set = set(t[0] for t in low_values)
             tail_count = sum(t[1] for t in low_values)
             ordered_keys = high_values+[('Other', tail_count)]
+            other_plotted = True
         else:
             other_set = set([])
+            other_plotted = False
 
         # create the main figure        
         fig = plt.figure()
+        width = 0.3
+        ind = np.arange(len(ancestry_totals)+1)
+
         bottoms = np.full((len(ancestry_totals)+1, ), 100.0)
+        bottoms_exp = np.full((len(ancestry_totals)+1, ), 100.0)
+
+        gene_in_pop = (popfreqs != None and (gene in popfreqs))
+
         label_order = ['Combined'] + sorted(ancestry_totals.keys())
         for (i, (hap, count)) in enumerate(ordered_keys):
             values = []
+            exp_values = []
             axes_labels = []
             for ancestry in label_order:
                 if ancestry == 'Combined':
@@ -483,11 +545,33 @@ def generateAncestryPlots(ancestry_data):
                     else:
                         v = ancestry_data[gene][ancestry].get(hap, 0)
                     denom = ancestry_totals[ancestry]
+
                 # we watch a percentage
                 values.append(100.0 * v / denom)
                 axes_labels.append(f'{ancestry}\n(N={denom})')
+
+                if gene_in_pop and hap != 'NO_MATCH':
+                    if ancestry == 'Combined':
+                        anc_translate = "ALL"
+                    elif ancestry == 'UNKNOWN':
+                        anc_translate = 'OTH'
+                    else:
+                        anc_translate = ancestry
+                    
+                    if hap == 'Other':
+                        # we use everything left
+                        exp_v = bottoms_exp[i]
+                    else:
+                        exp_v = popfreqs[gene][anc_translate].get(hap, 0)
+                    exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
+                    exp_values.append(100.0 * exp_v / exp_denom)
+                else:
+                    # if the gene is not in the population OR we have a NO_MATCH, just use 0.0 placehold
+                    exp_values.append(0.0)
             
             bottoms -= np.array(values)
+            bottoms_exp -= np.array(exp_values)
+
             max_len = 30
             if len(hap) > max_len:
                 hap = hap[:max_len-3]+'...'
@@ -498,8 +582,21 @@ def generateAncestryPlots(ancestry_data):
                 hatch = '//'
             else:
                 hatch = None
-            plt.bar(axes_labels, values, width=0.6, label=hap, bottom=bottoms, hatch=hatch)
+
+            if gene_in_pop:
+                plt.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length])
+                plt.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5)
+            else:
+                # plt.bar(axes_labels, values, width=0.6, label=hap, bottom=bottoms, hatch=hatch)
+                plt.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch)
         
+        if gene_in_pop and (not other_plotted) and np.any(bottoms_exp > 0.0001):
+            # only plot this special one IF no "Other" was already plotted AND popfreqs is enabled AND we have pop unaccounted for
+            plt.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1])
+            plt.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5)
+
+        plt.xticks(ind, axes_labels)
+            
         # customize title for some of the "weird" plots
         if gene == 'CYP2D6_cn':
             title = 'Copy number distribution for CYP2D6 by ancestry'
@@ -588,6 +685,9 @@ def generateDbRep(db_haps, ancestry_data):
     @param ancestry_data - [gene][ancestry][hap] -> count
     '''
     debug = False
+    PLOT_UNOBSERVED = False
+    PLOT_POP_LIMIT = False
+
     gene_order = sorted(db_haps.keys())
     gene_labels = []
     observed_fractions = []
@@ -638,8 +738,12 @@ def generateDbRep(db_haps, ancestry_data):
     width = 0.3
     ind = np.arange(len(gene_order))
 
-    first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed')
-    last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved') #, bottom=observed_counts)
+    if PLOT_UNOBSERVED:
+        first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed')
+        last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved') #, bottom=observed_counts)
+    else:
+        first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed')
+        last_bar = [None]*len(first_bar)
 
     # add text fraction overlay
     for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
@@ -649,7 +753,10 @@ def generateDbRep(db_haps, ancestry_data):
 
         # Y-offset, a few options here
         # placed at the top - gets cut off
-        height = max(fb.get_height(), lb.get_height())
+        if lb == None:
+            height = fb.get_height()
+        else:
+            height = max(fb.get_height(), lb.get_height())
         
         # constant at the bottom
         # height = 0.1
@@ -665,14 +772,20 @@ def generateDbRep(db_haps, ancestry_data):
     ax.set_axisbelow(True)
     plt.grid(axis='y')
     plt.yscale('symlog')
-    plt.ylim([0, 25000]) # hard-coded just to make the numbers fit in the axis
+    if PLOT_UNOBSERVED:
+        plt.ylim([0, 25000]) # hard-coded just to make the numbers fit in the axis
+    else:
+        plt.ylim([0, 1000])
     plt.ylabel('Allele count')
-    plt.title('Percentage of database alleles observed in cohort')
+    plt.title('Count/percentage of database alleles observed in cohort')
 
-    max_obs = max(total_observations)
-    plt.axhline(y=max_obs, linestyle='--', label='Cohort limit')
+    if PLOT_POP_LIMIT:
+        max_obs = max(total_observations)
+        plt.axhline(y=max_obs, linestyle='--', label='Cohort limit')
 
-    plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left')
+    if PLOT_POP_LIMIT or PLOT_UNOBSERVED:
+        # we only need the legend if we're plotting more than one thing
+        plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left')
 
     out_fn = f'{RESULTS_FOLDER}/observed_haps.png'
     print(f'Saving figure to {out_fn}...')
@@ -688,13 +801,21 @@ if __name__ == '__main__':
     aggregate_fn = f'{RESULTS_FOLDER}/combined_aggregate.tsv'
     print(f'Saving combined aggregate to {aggregate_fn}...')
     writeAggregateTsv(all_loaded_data, f'{RESULTS_FOLDER}/combined_aggregate.tsv')
+
+    display_expected = False # need to have the annotations for this to work
+    if display_expected:
+        pop_freq_folder = f'{DATA_FOLDER}/AllOfUs_Frequencies_v7/allele'
+        popfreqs = loadPopFreq(pop_freq_folder)
+    else:
+        # empty if we are not loading it
+        popfreqs = None
     
     # consolidate everything by ancestry
     reduce_to_core = True
     ancestry_collection = collectByAncestry(all_loaded_data, reduce_to_core)
 
     # now generate ancestry images
-    generateAncestryPlots(ancestry_collection)
+    generateAncestryPlots(ancestry_collection, popfreqs)
 
     # now lets look at database representation
     database_fn = f'{DATA_FOLDER}/starphase_db/v0.14.1/pbstarphase_20240826.json.gz'
