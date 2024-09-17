@@ -448,6 +448,36 @@ def categoryHlaDelta(delta_value):
         return HLA_MAJOR_DELTA
 
 #####################################################
+# Basic writers
+#####################################################
+
+def writeAggregateHaps(aggregate_data, output_fn):
+    '''
+    Converts the aggregate haplotype dict into a simple TSV file
+    '''
+    # open file
+    fp = open(output_fn, 'w+')
+    tsv_writer = csv.DictWriter(fp, delimiter='\t', fieldnames=[
+        'gene', 'ancestry', 'starphase_haplotype', 'count'
+    ])
+    tsv_writer.writeheader()
+
+    # write each aggregate value
+    for gene in sorted(aggregate_data.keys()):
+        for anc in sorted(aggregate_data[gene].keys()):
+            for hap in sorted(aggregate_data[gene][anc].keys()):
+                count = aggregate_data[gene][anc][hap]
+                row = {
+                    'gene' : gene,
+                    'ancestry' : anc,
+                    'starphase_haplotype' : hap,
+                    'count' : count
+                }
+                tsv_writer.writerow(row)
+
+    fp.close()
+
+#####################################################
 # Data analysis / visualization
 #####################################################
 
@@ -800,7 +830,7 @@ if __name__ == '__main__':
     # save the combined aggregate to a file
     aggregate_fn = f'{RESULTS_FOLDER}/combined_aggregate.tsv'
     print(f'Saving combined aggregate to {aggregate_fn}...')
-    writeAggregateTsv(all_loaded_data, f'{RESULTS_FOLDER}/combined_aggregate.tsv')
+    writeAggregateTsv(all_loaded_data, aggregate_fn)
 
     display_expected = False # need to have the annotations for this to work
     if display_expected:
@@ -813,6 +843,10 @@ if __name__ == '__main__':
     # consolidate everything by ancestry
     reduce_to_core = True
     ancestry_collection = collectByAncestry(all_loaded_data, reduce_to_core)
+    
+    hap_aggregate_fn = f'{RESULTS_FOLDER}/haplotype_aggregate.tsv'
+    print(f'Saving combined haplotype aggregate to {hap_aggregate_fn}...')
+    writeAggregateHaps(ancestry_collection, hap_aggregate_fn)
 
     # now generate ancestry images
     generateAncestryPlots(ancestry_collection, popfreqs)
