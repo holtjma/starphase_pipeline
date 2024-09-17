@@ -99,14 +99,13 @@ def get_batch_files():
 # The next two rules run fast and could be localrules, but we want to capture the logs in the event of failure
 rule collation_file:
     input:
+        script=f'{SCRIPTS_FOLDER}/GenerateCollationFile.py',
         batch_files=get_batch_files()
     output:
         tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
-    params:
-        script=f'{SCRIPTS_FOLDER}/GenerateCollationFile.py'
     log: f'{PIPELINE_FOLDER}/logs/collation/all_batches.log'
     shell: '''
-        python3 {params.script} \
+        python3 {input.script} \
             -o {output.tsv} \
             > {log} 2>&1
     '''
@@ -117,14 +116,13 @@ rule aggregate_summary:
         starphase_files=get_starphase_cohort(),
         coverage_files=get_mosdepth_cohort(),
         relationship_file=f'{PIPELINE_FOLDER}/somalier_relate/all_batches.pairs.tsv',
-        tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv'
+        tsv=f'{PIPELINE_FOLDER}/collation/all_batches.tsv',
+        script=f'{SCRIPTS_FOLDER}/AggregateData.py'
     output:
         tsv=f'{PIPELINE_FOLDER}/aggregate/aggregate_summary.tsv'
-    params:
-        script=f'{SCRIPTS_FOLDER}/AggregateData.py'
     log: f'{PIPELINE_FOLDER}/logs/aggregate/aggregate_summary.log'
     shell: '''
-        python3 {params.script} \
+        python3 {input.script} \
             -i {input.tsv} \
             -r {input.relationship_file} \
             -o {output.tsv} \
