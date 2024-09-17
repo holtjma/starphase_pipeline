@@ -33,9 +33,12 @@ def loadInputTsv(fn):
     fp.close()
     return ret
 
-def filterRelatedSamples(fn, cutoff):
+def filterRelatedSamples(sample_data, fn, cutoff):
     '''
     Parses our relationship file and returns a semi-optimal set of samples we should remove to cut out relationships.
+    @param sample_data - dictionary from sample ID to metrics values; if the sample is not present, then the dataset was already filtered
+    @param fn - the relationship TSV to load
+    @param cutoff - float value representating max allowing relationship
     '''
     print('Checking relationship metrics...')
     fp = open(fn, 'r')
@@ -46,6 +49,11 @@ def filterRelatedSamples(fn, cutoff):
         if relatedness >= cutoff:
             sample_a = row['#sample_a']
             sample_b = row['sample_b']
+
+            if (sample_a not in sample_data) or (sample_b not in sample_data):
+                # one of these two datasets was filtered due to coverage, we can ignore this relationship
+                print(f'\tIgnoring {sample_a} and {sample_b} relationship; one or both was previously filtered')
+                continue
 
             if sample_a not in relations:
                 relations[sample_a] = set([])
@@ -62,18 +70,26 @@ def filterRelatedSamples(fn, cutoff):
     filtered_set = set([])
     while True:
         max_relat = 0
+        min_coverage = 0
         max_sample = None
 
         # sorted just does a fixed ordering
         for k in sorted(relations.keys()):
             if len(relations[k]) > max_relat:
+                # this one has more relationships
                 max_relat = len(relations[k])
+                min_coverage = sample_data[k]['coverage']
+                max_sample = k
+            elif len(relations[k]) == max_relat and sample_data[k]['coverage'] < min_coverage:
+                # this one has same relationship count, but lower coverage; so keep the better dataset
+                max_relat = len(relations[k])
+                min_coverage = sample_data[k]['coverage']
                 max_sample = k
         
         if max_relat == 0:
             break
 
-        print(f'\tFiltering {max_sample} with {max_relat} relatives detected: {relations[max_sample]}')
+        print(f'\tFiltering {max_sample} with {max_relat} relatives and {min_coverage:.2f}x coverage: {relations[max_sample]}')
         filtered_set.add(max_sample)
         for relative in relations[max_sample]:
             relations[relative].remove(max_sample)
@@ -126,7 +142,8 @@ def loadCohortData(cohort_datasets):
             'ancestry' : ancestry,
             'ancestry_prob' : anc_prob,
             'diplotypes' : diplotypes,
-            'hla_deltas' : hla_deltas
+            'hla_deltas' : hla_deltas,
+            'coverage' : mean_coverage
         }
     
     return ret
@@ -362,20 +379,20 @@ if __name__ == '__main__':
     # load the data files we need to parse
     print(f'Loading input collation file {args.input_tsv}...')
     data_collection = loadInputTsv(args.input_tsv)
+    
+    # now load the actual data
+    print('Loading all data files...')
+    sample_data = loadCohortData(data_collection)
 
     if args.relationship_tsv != None:
         max_related = 0.20 # should catch 1st & 2nd-degree relatives
-        filter_set = filterRelatedSamples(args.relationship_tsv, max_related)
+        filter_set = filterRelatedSamples(sample_data, args.relationship_tsv, max_related)
     else:
         filter_set = set([])
 
     # remove all relatives here
     for sample in filter_set:
-        del data_collection[sample]
-    
-    # now load the actual data
-    print('Loading all data files...')
-    sample_data = loadCohortData(data_collection)
+        del sample_data[sample]
 
     # aggregate everything, we do NOT want to reduce alleles at this point; that will happy on all data
     # output here is a dict with (gene, ancestry, sex, diplotype) -> count; no sample info exists anymore
