@@ -717,6 +717,7 @@ def generateDbRep(db_haps, ancestry_data):
     debug = False
     PLOT_UNOBSERVED = False
     PLOT_POP_LIMIT = False
+    COLOR_BY_FRACTION = True
 
     gene_order = sorted(db_haps.keys())
     gene_labels = []
@@ -772,8 +773,14 @@ def generateDbRep(db_haps, ancestry_data):
         first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed')
         last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved') #, bottom=observed_counts)
     else:
-        first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed')
-        last_bar = [None]*len(first_bar)
+        if COLOR_BY_FRACTION:
+            cmap = plt.get_cmap('RdYlGn')
+            bar_colors = [cmap(obs / 100.0) for obs in observed_fractions]
+            first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', color=bar_colors, edgecolor='black', linewidth=1)
+            last_bar = [None]*len(first_bar)
+        else:
+            first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed')
+            last_bar = [None]*len(first_bar)
 
     # add text fraction overlay
     for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
