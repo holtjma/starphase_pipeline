@@ -28,6 +28,7 @@ HLA_EQUAL = "Equal" # exact sequence match in overlap
 HLA_OFF_BY_ONE = "Off-by-one (ED=1)" # 1bp delta, could be homo-polymer error
 HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
 HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
+GENERATE_JOINT_HLA = True # enables a single joint image for the HLA cDNA/DNA deltas
 
 # controls the CYP2D6 stuff
 IMPACT_MODE = 'status' # 'status' or 'score'
@@ -58,6 +59,12 @@ def loadD6Impact():
     ret['*68x2'] = {
         'score' : '0.0',
         'status' : 'No function'
+    }
+
+    # sentinel for our undefined hybrids
+    ret['*None'] = {
+        'score' : 'n/a',
+        'status' : 'Uncertain function'
     }
     
     fp.close()
@@ -264,10 +271,14 @@ def reduceCyp2d6Hap(hap):
         assert(len(copy_frags) <= 2)
 
         allele = copy_frags[0][1:] # remove *
-        float_val = float(allele)
-        int_val = int(np.floor(float_val))
-
-        copy_frags[0] = str(int_val)
+        if allele.startswith('CYP2D6::CYP2D7::'):
+            # this is an unknown hybrid, we do not need to convert anything here
+            copy_frags[0] = allele
+        else:
+            float_val = float(allele)
+            int_val = int(np.floor(float_val))
+            copy_frags[0] = str(int_val)
+        
         reduc.append('*' + 'x'.join(copy_frags))
     return ' + '.join(reduc)
 
@@ -295,8 +306,14 @@ def reduceCyp2d6CN(hap):
         assert(len(copy_frags) <= 2)
 
         allele = copy_frags[0][1:] # remove *
-        float_val = float(allele)
-        int_val = int(np.floor(float_val))
+        is_undefined_hybrid = False
+        if allele.startswith('CYP2D6::CYP2D7::'):
+            # this is an unknown hybrid, so count as a hybrid later
+            is_undefined_hybrid = True
+            int_val = None
+        else:
+            float_val = float(allele)
+            int_val = int(np.floor(float_val))
 
         if len(copy_frags) == 1:
             cn = 1
@@ -309,7 +326,7 @@ def reduceCyp2d6CN(hap):
             cn_count = 0
 
         # hybrids from page 9 of https://a.storyblok.com/f/70677/x/169927da7a/cyp2d6_structural-variation_v3-4.pdf
-        elif int_val in [13, 36, 61, 63, 68, 83] or allele == '4.013':
+        elif int_val in [13, 36, 61, 63, 68, 83] or allele == '4.013' or is_undefined_hybrid:
             hybrid_count += cn
 
         else:
@@ -341,8 +358,12 @@ def scoreCyp2d6(hap, impact_mode):
         assert(len(copy_frags) <= 2)
 
         allele = copy_frags[0][1:] # remove *
-        float_val = float(allele)
-        int_val = int(np.floor(float_val))
+        if allele.startswith('CYP2D6::CYP2D7::'):
+            # this is an unknown hybrid, we will not have an impact score here
+            int_val = None
+        else:
+            float_val = float(allele)
+            int_val = int(np.floor(float_val))
 
         if len(copy_frags) == 2:
             copy_count = int(copy_frags[1])
@@ -371,16 +392,23 @@ def scoreCyp2d6(hap, impact_mode):
     if len(impacts) > 1:
         # see if we can filter down the impacts to something easy by removing all defunct ones
         filtered_impacts = []
+        uncertain_detected = False
         for imp in impacts:
             if imp['status'] == 'No function':
                 # can be ignored
                 pass
+            elif imp['status'] == 'Uncertain function':
+                uncertain_detected = True
+                filtered_impacts.append(imp)
             else:
                 filtered_impacts.append(imp)
         
         if len(filtered_impacts) == 0:
             # everything is defunct, so populate with No function
             impacts = [{'score' : '0.0', 'status' : 'No function'}]
+        elif uncertain_detected:
+            # we detected at least one that is uncertain, so all will be uncertain
+            impacts = [{'score' : 'n/a', 'status' : 'Uncertain function'}]
         else:
             # we had something left over
             impacts = filtered_impacts
@@ -665,6 +693,119 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         plt.savefig(f'{image_folder}/{gene}_distribution.png', bbox_inches='tight')
         plt.close()
     
+    if GENERATE_JOINT_HLA:
+        categories = [
+            'HLA-A_cdna_delta', 'HLA-B_cdna_delta',
+            'HLA-A_dna_delta', 'HLA-B_dna_delta'
+        ]
+        # basic
+        # fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
+
+        # more complicated, but we can control spacing here
+        fig = plt.figure(figsize=(14, 10))
+        gs = fig.add_gridspec(2, 2, hspace=0.1, wspace=0.05)
+        axes = gs.subplots(sharex=True, sharey=True)
+
+        for (i, gene) in enumerate(categories):
+            # set the figure
+            ax = axes[i // 2, i % 2]
+
+            # contains the total counts across all ancestries
+            total_counts = {}
+            ancestry_totals = {}
+
+            for ancestry in ancestry_data[gene]:
+                for hap in ancestry_data[gene][ancestry]:
+                    # accumulate totals
+                    total_counts[hap] = total_counts.get(hap, 0) + ancestry_data[gene][ancestry][hap]
+
+                    # count the denominator for each ancestry
+                    ancestry_totals[ancestry] = ancestry_totals.get(ancestry, 0) + ancestry_data[gene][ancestry][hap]
+            
+            # specify the order for these
+            ordered_keys = [(k, total_counts.get(k, 0)) for k in [
+                HLA_EQUAL, HLA_OFF_BY_ONE, HLA_MINOR_DELTA, HLA_MAJOR_DELTA, HLA_MISSING
+            ]]
+            
+            # get the total denom
+            total_hap_count = sum([t[1] for t in ordered_keys])
+
+            # figure out if we need to restrict our display
+            max_colors = 20 # max number of categories
+            cycle_length = 10 # if greater than this, we add a hatch
+            assert(cycle_length == len(colors))
+
+            other_set = set([])
+            other_plotted = False
+
+            # create the main figure        
+            width = 0.3
+            ind = np.arange(len(ancestry_totals)+1)
+            # bottoms = np.full((len(ancestry_totals)+1, ), 100.0)
+            bottoms = np.zeros(shape=(len(ancestry_totals)+1, ))
+            
+            label_order = ['Combined'] + sorted(ancestry_totals.keys())
+            for (i, (hap, count)) in enumerate(ordered_keys):
+                values = []
+                exp_values = []
+                axes_labels = []
+                for ancestry in label_order:
+                    if ancestry == 'Combined':
+                        v = count
+                        denom = total_hap_count
+                    else:
+                        if hap == 'Other':
+                            v = 0
+                            for h in ancestry_data[gene][ancestry]:
+                                if h in other_set:
+                                    v += ancestry_data[gene][ancestry][h]
+                        else:
+                            v = ancestry_data[gene][ancestry].get(hap, 0)
+                        denom = ancestry_totals[ancestry]
+
+                    # we watch a percentage
+                    values.append(100.0 * v / denom)
+                    axes_labels.append(f'{ancestry}\n(N={denom})')
+                    # axes_labels.append(ancestry)
+                
+                # bottoms -= np.array(values)
+                ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms)
+                bottoms += np.array(values)
+            
+            ax.set_xticks(ind, axes_labels)
+                
+            # customize title for some of the "weird" plots
+            if gene.endswith('dna_delta'):
+                g, tag, d = gene.split('_')
+                if tag == 'dna':
+                    tag = 'DNA'
+                else:
+                    tag = 'cDNA'
+                # title = f'Differences between DB and consensus for {g} {tag}'
+                title = f'{g} {tag}'
+                legend_title = 'Difference category'
+
+            ax.set_axisbelow(True)
+            ax.grid(axis='y')
+            # plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left') # anchors to right side
+            # plt.legend(title=legend_title, bbox_to_anchor=(1.0, 0.5), loc='center left')
+
+            ax.set_ylim(84, 100)
+            # plt.xticks(rotation=60) #no rotation really needed here
+            ax.set_title(title, fontsize=16)
+            # ax.set_ylabel('Percentage')
+            # ax.set_xlabel('Ancestry (peddy)')
+            ax.label_outer()
+
+        fig.supxlabel('Ancestry (peddy)', fontsize=16, y=0.02)
+        fig.supylabel('Percentage', fontsize=16, x=0.06)
+        fig.suptitle('Difference between database sequence and StarPhase consensus', fontsize=18, y=0.95)
+        # plt.legend(title=legend_title, bbox_to_anchor=(1.0, 1.1), loc='center left', fontsize=16, title_fontsize=16)
+        plt.legend(title=legend_title, bbox_to_anchor=(0.20, 1.4), loc='center left', fontsize=16, title_fontsize=16, framealpha=1.0)
+        
+        plt.savefig(f'{image_folder}/HLA_joint.png', bbox_inches='tight')
+        plt.close()
+    
     print('Ancestry image generation complete.')
 
 def loadDatabaseHaplotypes(fn, reduce_to_core):
@@ -755,8 +896,17 @@ def generateDbRep(db_haps, ancestry_data):
         if len(unknown) > 0 and unknown != set(['NO_MATCH']) and unknown != set(['NO_MATCH', 'heteroplasmy']):
             # if this happens, we may need to encode more D6 haplotypes
             # OR if someone ran it with a wrong DB, we could get weird mismatches
-            print('Unknown:', unknown)
-            raise Exception('Unknown haps encountered')
+            print(f'Unknown haps encountered in {gene}:', unknown)
+            all_fine = True
+            for hap in unknown:
+                if hap.startswith('*CYP2D6::CYP2D7::'):
+                    # this is just an unknown hap, so it's fine
+                    pass
+                else:
+                    all_fine = False
+
+            if not all_fine:
+                raise Exception('Unknown haps encountered')
         
         # save the data for plotting
         observed_fractions.append(frac_shared)
@@ -843,6 +993,7 @@ if __name__ == '__main__':
     if display_expected:
         pop_freq_folder = f'{DATA_FOLDER}/AllOfUs_Frequencies_v7/allele'
         popfreqs = loadPopFreq(pop_freq_folder)
+        print(f'Loaded population frequencies for {len(popfreqs)} genes.')
     else:
         # empty if we are not loading it
         popfreqs = None
