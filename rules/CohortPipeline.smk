@@ -205,7 +205,7 @@ rule somalier:
         sites=f'{DATA_FOLDER}/somalier/sites.hg38.vcf.gz'
     resources:
         mem_mb=2*1024,
-        runtime=20 #minutes
+        runtime=60 #minutes
     threads: 1
     conda: f"{ENV_FOLDER}/somalier.yaml"
     log: "{pipeline}/logs/somalier/{sample}.log"
