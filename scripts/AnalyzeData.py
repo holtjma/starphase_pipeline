@@ -274,6 +274,9 @@ def reduceCyp2d6Hap(hap):
         if allele.startswith('CYP2D6::CYP2D7::'):
             # this is an unknown hybrid, we do not need to convert anything here
             copy_frags[0] = allele
+        elif allele == '4.013':
+            # do not collapse this one, it's a special case that is different from *4
+            copy_frags[0] = allele
         else:
             float_val = float(allele)
             int_val = int(np.floor(float_val))
@@ -310,6 +313,9 @@ def reduceCyp2d6CN(hap):
         if allele.startswith('CYP2D6::CYP2D7::'):
             # this is an unknown hybrid, so count as a hybrid later
             is_undefined_hybrid = True
+            int_val = None
+        elif allele == '4.013':
+            # do not collapse this one, it's a special case that is different from *4
             int_val = None
         else:
             float_val = float(allele)
@@ -361,6 +367,7 @@ def scoreCyp2d6(hap, impact_mode):
         if allele.startswith('CYP2D6::CYP2D7::'):
             # this is an unknown hybrid, we will not have an impact score here
             int_val = None
+        #elif allele == '4.013': # we do not currently need a special case for this one here
         else:
             float_val = float(allele)
             int_val = int(np.floor(float_val))
@@ -604,6 +611,9 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                         v = ancestry_data[gene][ancestry].get(hap, 0)
                     denom = ancestry_totals[ancestry]
 
+                if hap == 'NO_MATCH' and ancestry == 'Combined':
+                    print('', '', ancestry, hap, 100 * v / denom, sep='\t')
+
                 # we watch a percentage
                 values.append(100.0 * v / denom)
                 axes_labels.append(f'{ancestry}\n(N={denom})')
@@ -660,10 +670,10 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             title = 'Copy number distribution for CYP2D6 by ancestry'
             legend_title = 'Top copy numbers'
         elif gene == 'CYP2D6_impact':
-            title = 'CYP2D6 haplotype function by ancestry'
+            title = 'Preducted CYP2D6 haplotype function by ancestry'
             legend_title = 'Functional categories'
         elif gene == 'CYP2D6_dip_func':
-            title = 'CYP2D6 diplotype predicted metabolizer phenotype'
+            title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
             legend_title = 'Metabolizer categories'
         elif gene.endswith('dna_delta'):
             g, tag, d = gene.split('_')
@@ -989,7 +999,7 @@ if __name__ == '__main__':
     print(f'Saving combined aggregate to {aggregate_fn}...')
     writeAggregateTsv(all_loaded_data, aggregate_fn)
 
-    display_expected = False # need to have the annotations for this to work
+    display_expected = True # need to have the annotations for this to work
     if display_expected:
         pop_freq_folder = f'{DATA_FOLDER}/AllOfUs_Frequencies_v7/allele'
         popfreqs = loadPopFreq(pop_freq_folder)
