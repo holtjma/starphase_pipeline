@@ -28,7 +28,7 @@ HLA_EQUAL = "Equal" # exact sequence match in overlap
 HLA_OFF_BY_ONE = "Off-by-one (ED=1)" # 1bp delta, could be homo-polymer error
 HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
 HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
-GENERATE_JOINT_HLA = True # enables a single joint image for the HLA cDNA/DNA deltas
+GENERATE_JOINT_FIGURES = True # enables a single joint image for some of the paper figures
 
 # controls the CYP2D6 stuff
 IMPACT_MODE = 'status' # 'status' or 'score'
@@ -703,7 +703,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         plt.savefig(f'{image_folder}/{gene}_distribution.png', bbox_inches='tight')
         plt.close()
     
-    if GENERATE_JOINT_HLA:
+    if GENERATE_JOINT_FIGURES:
         categories = [
             'HLA-A_cdna_delta', 'HLA-B_cdna_delta',
             'HLA-A_dna_delta', 'HLA-B_dna_delta'
@@ -816,6 +816,201 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         plt.savefig(f'{image_folder}/HLA_joint.png', bbox_inches='tight')
         plt.close()
     
+        # now do the other figures a bit more systematically
+        figure_dict = {
+            'cpic_stack' : ('VKORC1', 'SLCO1B1'),
+            'CYP2D6_stack' : ('CYP2D6', 'CYP2D6_dip_func')
+        }
+        for figure_name in sorted(figure_dict.keys()):
+            # basic
+            # fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
+
+            is_shared_labels = figure_name != 'CYP2D6_stack'
+            
+            # more complicated, but we can control spacing here
+            if is_shared_labels:
+                h_space = 0.1
+            else:
+                h_space = 0.25
+            fig = plt.figure(figsize=(7, 10))
+            gs = fig.add_gridspec(2, 1, hspace=h_space, wspace=0.05)
+
+            axes = gs.subplots(sharex=is_shared_labels)
+
+            for (i, gene) in enumerate(figure_dict[figure_name]):
+                # set the figure
+                #ax = axes[i // 2, i % 2]
+                ax = axes[i]
+
+                # contains the total counts across all ancestries
+                total_counts = {}
+                ancestry_totals = {}
+
+                for ancestry in ancestry_data[gene]:
+                    for hap in ancestry_data[gene][ancestry]:
+                        # accumulate totals
+                        total_counts[hap] = total_counts.get(hap, 0) + ancestry_data[gene][ancestry][hap]
+
+                        # count the denominator for each ancestry
+                        ancestry_totals[ancestry] = ancestry_totals.get(ancestry, 0) + ancestry_data[gene][ancestry][hap]
+                
+                if gene.endswith('dna_delta'):
+                    # specify the order for these
+                    ordered_keys = [(k, total_counts.get(k, 0)) for k in [
+                        HLA_EQUAL, HLA_OFF_BY_ONE, HLA_MINOR_DELTA, HLA_MAJOR_DELTA, HLA_MISSING
+                    ]]
+                elif gene == 'CYP2D6_dip_func':
+                    ordered_keys = [(k, total_counts.get(k, 0)) for k in [
+                        D6_POOR, D6_INTERMEDIATE, D6_NORMAL, D6_ULTRA, D6_INDETERMINATE
+                    ]]
+                else:
+                    # order from most count to least count
+                    ordered_keys = [(k, total_counts[k]) for k in total_counts]
+                    ordered_keys.sort(key=lambda t: (t[1], t[0]), reverse=True)
+
+                # get the total denom
+                total_hap_count = sum([t[1] for t in ordered_keys])
+
+                # figure out if we need to restrict our display
+                max_colors = 20 # max number of categories
+                cycle_length = 10 # if greater than this, we add a hatch
+                assert(cycle_length == len(colors))
+
+                if len(ordered_keys) > max_colors:
+                    # we need to truncate to 9, and then have an "everything else"
+                    low_values = ordered_keys[max_colors-1:]
+                    high_values = ordered_keys[:max_colors-1]
+
+                    other_set = set(t[0] for t in low_values)
+                    tail_count = sum(t[1] for t in low_values)
+                    ordered_keys = high_values+[('Other', tail_count)]
+                    other_plotted = True
+                else:
+                    other_set = set([])
+                    other_plotted = False
+
+                # create the main figure        
+                # fig = plt.figure()
+                width = 0.3
+                ind = np.arange(len(ancestry_totals)+1)
+
+                bottoms = np.full((len(ancestry_totals)+1, ), 100.0)
+                bottoms_exp = np.full((len(ancestry_totals)+1, ), 100.0)
+
+                gene_in_pop = (popfreqs != None and (gene in popfreqs))
+
+                label_order = ['Combined'] + sorted(ancestry_totals.keys())
+                for (i, (hap, count)) in enumerate(ordered_keys):
+                    values = []
+                    exp_values = []
+                    axes_labels = []
+                    for ancestry in label_order:
+                        if ancestry == 'Combined':
+                            v = count
+                            denom = total_hap_count
+                        else:
+                            if hap == 'Other':
+                                v = 0
+                                for h in ancestry_data[gene][ancestry]:
+                                    if h in other_set:
+                                        v += ancestry_data[gene][ancestry][h]
+                            else:
+                                v = ancestry_data[gene][ancestry].get(hap, 0)
+                            denom = ancestry_totals[ancestry]
+
+                        # we watch a percentage
+                        values.append(100.0 * v / denom)
+                        axes_labels.append(f'{ancestry}\n(N={denom})')
+
+                        if gene_in_pop and hap != 'NO_MATCH':
+                            if ancestry == 'Combined':
+                                anc_translate = "ALL"
+                            elif ancestry == 'UNKNOWN':
+                                anc_translate = 'OTH'
+                            else:
+                                anc_translate = ancestry
+                            
+                            if hap == 'Other':
+                                # we use everything left
+                                exp_v = bottoms_exp[i]
+                            else:
+                                exp_v = popfreqs[gene][anc_translate].get(hap, 0)
+                            exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
+                            exp_values.append(100.0 * exp_v / exp_denom)
+                        else:
+                            # if the gene is not in the population OR we have a NO_MATCH, just use 0.0 placehold
+                            exp_values.append(0.0)
+                    
+                    bottoms -= np.array(values)
+                    bottoms_exp -= np.array(exp_values)
+
+                    max_len = 30
+                    if len(hap) > max_len:
+                        hap = hap[:max_len-3]+'...'
+                    
+                    if i >= 2*cycle_length:
+                        raise Exception('need additional hatches')
+                    elif i >= cycle_length:
+                        hatch = '//'
+                    else:
+                        hatch = None
+
+                    if gene_in_pop:
+                        ax.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length])
+                        ax.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5)
+                    else:
+                        # plt.bar(axes_labels, values, width=0.6, label=hap, bottom=bottoms, hatch=hatch)
+                        ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch)
+                
+                if gene_in_pop and (not other_plotted) and np.any(bottoms_exp > 0.0001):
+                    # only plot this special one IF no "Other" was already plotted AND popfreqs is enabled AND we have pop unaccounted for
+                    ax.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1])
+                    ax.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5)
+
+                ax.set_xticks(ind, axes_labels)
+                    
+                # customize title for some of the "weird" plots
+                if gene == 'CYP2D6_cn':
+                    title = 'Copy number distribution for CYP2D6 by ancestry'
+                    legend_title = 'Top copy numbers'
+                elif gene == 'CYP2D6_impact':
+                    title = 'Preducted CYP2D6 haplotype function by ancestry'
+                    legend_title = 'Functional categories'
+                elif gene == 'CYP2D6_dip_func':
+                    title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
+                    legend_title = 'Metabolizer categories'
+                elif gene.endswith('dna_delta'):
+                    g, tag, d = gene.split('_')
+                    if tag == 'dna':
+                        tag = 'DNA'
+                    else:
+                        tag = 'cDNA'
+                    title = f'Differences between DB and consensus for {g} {tag}'
+                    legend_title = 'Difference category'
+                else:
+                    title = f'Haplotype distribution for {gene} by ancestry'
+                    legend_title = 'Top haplotypes'
+
+                # ax = plt.gca()
+                ax.set_axisbelow(True)
+                ax.grid(axis='y')
+                # plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left') # anchors to right side
+                ax.legend(title=legend_title, bbox_to_anchor=(1.0, 0.5), loc='center left')
+
+                ax.set_ylim(0, 100)
+                # plt.xticks(rotation=60) #no rotation really needed here
+                # ax.set_ylabel('Percentage')
+                # ax.set_xlabel('Ancestry (peddy)')
+
+                ax.set_title(title)
+            
+            fig.supxlabel('Ancestry (peddy)', fontsize=16, y=0.04)
+            fig.supylabel('Percentage', fontsize=16, x=0.04)
+            # fig.suptitle('Difference between database sequence and StarPhase consensus', fontsize=18, y=0.95)    
+
+            plt.savefig(f'{image_folder}/{figure_name}.png', bbox_inches='tight')
+            plt.close()
+
     print('Ancestry image generation complete.')
 
 def loadDatabaseHaplotypes(fn, reduce_to_core):
