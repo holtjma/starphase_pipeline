@@ -24,11 +24,14 @@ from PipelineConfig import *
 ENABLE_HLA_DELTAS = True # if True, this will run the HLA delta figures as well
 HLA_MAX_DELTA = 5 # this is a cut-off between minor/major ED
 HLA_MISSING = "Missing" # no entry in DB, should only happen to DNA
-HLA_EQUAL = "Equal" # exact sequence match in overlap
+HLA_EQUAL = "Exact match (ED=0)" # exact sequence match in overlap
 HLA_OFF_BY_ONE = "Off-by-one (ED=1)" # 1bp delta, could be homo-polymer error
 HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
 HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
 GENERATE_JOINT_FIGURES = True # enables a single joint image for some of the paper figures
+USE_CUSTOM_COLORS = True # enables a non-default color scheme
+MAKE_TITLES = True # if True, include titles
+CUSTOM_LEGEND = False # if True, shift the legend location below and make it 2-column
 
 # controls the CYP2D6 stuff
 IMPACT_MODE = 'status' # 'status' or 'score'
@@ -131,6 +134,7 @@ def loadAllAggregateFiles(filenames):
         print(f'\tLoading aggregate file: {fn}')
         fp = open(fn, 'r')
         tsv_reader = csv.DictReader(fp, delimiter='\t')
+        gene_count = {}
         for row in tsv_reader:
             # pull out all these values as a key
             gene = row['gene']
@@ -144,8 +148,17 @@ def loadAllAggregateFiles(filenames):
 
             # add the count
             ret[key] = ret.get(key, 0) + count
+            gene_count[gene] = gene_count.get(gene, 0) + count
 
         fp.close()
+
+        observed_counts = set([])
+        for g in sorted(gene_count.keys()):
+            c = gene_count[g]
+            if c not in observed_counts:
+                print(f'\t\t{g} -> {c}')
+                observed_counts.add(c)
+        
     print('Done loading aggregate files.')
     return ret
 
@@ -528,9 +541,26 @@ def generateAncestryPlots(ancestry_data, popfreqs):
     
     print(f'Generating ancestry images at {image_folder}...')
 
-    # get the default color cycle
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
+    if USE_CUSTOM_COLORS:
+        # colors can be any length, but more than 10 is usually bad for visuals
+        colors = [
+            '#1383C6', #bright blue,
+            # '#E16A2C', #bright orange
+            '#F99D41', #light orange
+            '#009D4E', #bright green; default palette has red next, which is bad for RG colorblind
+            '#5F249F', #purple
+            '#FF66CC', #magenta
+            'lightgrey',
+            #'#6ABF6A', #light green
+            #'red',
+            #'green',
+            #'blue'
+        ]
+        
+    else:
+        # get the default color cycle
+        prop_cycle = plt.rcParams['axes.prop_cycle']
+        colors = prop_cycle.by_key()['color']
 
     for gene in sorted(ancestry_data.keys()):
         print(f'\tCreating image for {gene}...')
@@ -565,9 +595,12 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         total_hap_count = sum([t[1] for t in ordered_keys])
 
         # figure out if we need to restrict our display
-        max_colors = 20 # max number of categories
-        cycle_length = 10 # if greater than this, we add a hatch
-        assert(cycle_length == len(colors))
+        # cycle_length = 10 # if greater than this, we add a hatch
+        # max_colors = 20 # max number of categories
+        # assert(cycle_length == len(colors))
+        
+        cycle_length = len(colors)
+        max_colors = 2 * cycle_length
 
         if len(ordered_keys) > max_colors:
             # we need to truncate to 9, and then have an "everything else"
@@ -597,7 +630,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             values = []
             exp_values = []
             axes_labels = []
-            for ancestry in label_order:
+            for (a_ind, ancestry) in enumerate(label_order):
                 if ancestry == 'Combined':
                     v = count
                     denom = total_hap_count
@@ -628,10 +661,11 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     
                     if hap == 'Other':
                         # we use everything left
-                        exp_v = bottoms_exp[i]
+                        exp_v = bottoms_exp[a_ind]
+                        exp_denom = 100.0 # it's already in fraction form since we're looking at the bottom
                     else:
                         exp_v = popfreqs[gene][anc_translate].get(hap, 0)
-                    exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
+                        exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
                     exp_values.append(100.0 * exp_v / exp_denom)
                 else:
                     # if the gene is not in the population OR we have a NO_MATCH, just use 0.0 placehold
@@ -652,16 +686,16 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                 hatch = None
 
             if gene_in_pop:
-                plt.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length])
-                plt.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5)
+                plt.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
+                plt.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5, edgecolor='black', linewidth=1)
             else:
                 # plt.bar(axes_labels, values, width=0.6, label=hap, bottom=bottoms, hatch=hatch)
-                plt.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch)
+                plt.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
         
         if gene_in_pop and (not other_plotted) and np.any(bottoms_exp > 0.0001):
             # only plot this special one IF no "Other" was already plotted AND popfreqs is enabled AND we have pop unaccounted for
-            plt.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1])
-            plt.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5)
+            plt.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1], edgecolor='black', linewidth=1)
+            plt.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5, edgecolor='black', linewidth=1)
 
         plt.xticks(ind, axes_labels)
             
@@ -670,7 +704,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             title = 'Copy number distribution for CYP2D6 by ancestry'
             legend_title = 'Top copy numbers'
         elif gene == 'CYP2D6_impact':
-            title = 'Preducted CYP2D6 haplotype function by ancestry'
+            title = 'Predicted CYP2D6 haplotype function by ancestry'
             legend_title = 'Functional categories'
         elif gene == 'CYP2D6_dip_func':
             title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
@@ -691,14 +725,27 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         ax.set_axisbelow(True)
         plt.grid(axis='y')
         # plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left') # anchors to right side
-        plt.legend(title=legend_title, bbox_to_anchor=(1.0, 0.5), loc='center left')
+        if CUSTOM_LEGEND:
+            leg_handles, leg_labels = ax.get_legend_handles_labels()
+            # order = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+            order = range(0, len(leg_handles))
+            #plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
+            plt.legend(
+                [leg_handles[idx] for idx in order],
+                [leg_labels[idx] for idx in order], 
+                title=legend_title,
+                #bbox_to_anchor=(1.0, 1.01, 1., .102), ncol=3, loc='lower right', borderaxespad=0.)
+                bbox_to_anchor=(0.5, -0.2), ncol=3, loc='upper center', borderaxespad=0.)
+        else:
+            plt.legend(title=legend_title, bbox_to_anchor=(1.0, 0.5), loc='center left')
 
         plt.ylim(0, 100)
         # plt.xticks(rotation=60) #no rotation really needed here
         plt.ylabel('Percentage')
         plt.xlabel('Ancestry (peddy)')
 
-        plt.title(title)
+        if MAKE_TITLES:
+            plt.title(title)
 
         plt.savefig(f'{image_folder}/{gene}_distribution.png', bbox_inches='tight')
         plt.close()
@@ -716,9 +763,9 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         gs = fig.add_gridspec(2, 2, hspace=0.1, wspace=0.05)
         axes = gs.subplots(sharex=True, sharey=True)
 
-        for (i, gene) in enumerate(categories):
+        for (j, gene) in enumerate(categories):
             # set the figure
-            ax = axes[i // 2, i % 2]
+            ax = axes[j // 2, j % 2]
 
             # contains the total counts across all ancestries
             total_counts = {}
@@ -741,9 +788,11 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             total_hap_count = sum([t[1] for t in ordered_keys])
 
             # figure out if we need to restrict our display
-            max_colors = 20 # max number of categories
-            cycle_length = 10 # if greater than this, we add a hatch
-            assert(cycle_length == len(colors))
+            # max_colors = 20 # max number of categories
+            # cycle_length = 10 # if greater than this, we add a hatch
+            # assert(cycle_length == len(colors))
+            cycle_length = len(colors)
+            max_colors = 2 * cycle_length
 
             other_set = set([])
             other_plotted = False
@@ -779,7 +828,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     # axes_labels.append(ancestry)
                 
                 # bottoms -= np.array(values)
-                ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms)
+                ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
                 bottoms += np.array(values)
             
             ax.set_xticks(ind, axes_labels)
@@ -809,7 +858,8 @@ def generateAncestryPlots(ancestry_data, popfreqs):
 
         fig.supxlabel('Ancestry (peddy)', fontsize=16, y=0.02)
         fig.supylabel('Percentage', fontsize=16, x=0.06)
-        fig.suptitle('Difference between database sequence and StarPhase consensus', fontsize=18, y=0.95)
+        if MAKE_TITLES:
+            fig.suptitle('Difference between database sequence and StarPhase consensus', fontsize=18, y=0.95)
         # plt.legend(title=legend_title, bbox_to_anchor=(1.0, 1.1), loc='center left', fontsize=16, title_fontsize=16)
         plt.legend(title=legend_title, bbox_to_anchor=(0.20, 1.4), loc='center left', fontsize=16, title_fontsize=16, framealpha=1.0)
         
@@ -837,10 +887,10 @@ def generateAncestryPlots(ancestry_data, popfreqs):
 
             axes = gs.subplots(sharex=is_shared_labels)
 
-            for (i, gene) in enumerate(figure_dict[figure_name]):
+            for (j, gene) in enumerate(figure_dict[figure_name]):
                 # set the figure
                 #ax = axes[i // 2, i % 2]
-                ax = axes[i]
+                ax = axes[j]
 
                 # contains the total counts across all ancestries
                 total_counts = {}
@@ -872,9 +922,11 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                 total_hap_count = sum([t[1] for t in ordered_keys])
 
                 # figure out if we need to restrict our display
-                max_colors = 20 # max number of categories
-                cycle_length = 10 # if greater than this, we add a hatch
-                assert(cycle_length == len(colors))
+                # max_colors = 20 # max number of categories
+                # cycle_length = 10 # if greater than this, we add a hatch
+                # assert(cycle_length == len(colors))
+                cycle_length = len(colors)
+                max_colors = 2 * cycle_length
 
                 if len(ordered_keys) > max_colors:
                     # we need to truncate to 9, and then have an "everything else"
@@ -904,7 +956,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     values = []
                     exp_values = []
                     axes_labels = []
-                    for ancestry in label_order:
+                    for (a_ind, ancestry) in enumerate(label_order):
                         if ancestry == 'Combined':
                             v = count
                             denom = total_hap_count
@@ -932,10 +984,11 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                             
                             if hap == 'Other':
                                 # we use everything left
-                                exp_v = bottoms_exp[i]
+                                exp_v = bottoms_exp[a_ind]
+                                exp_denom = 100.0
                             else:
                                 exp_v = popfreqs[gene][anc_translate].get(hap, 0)
-                            exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
+                                exp_denom = popfreqs[gene][anc_translate]["TOTAL"]
                             exp_values.append(100.0 * exp_v / exp_denom)
                         else:
                             # if the gene is not in the population OR we have a NO_MATCH, just use 0.0 placehold
@@ -956,16 +1009,16 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                         hatch = None
 
                     if gene_in_pop:
-                        ax.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length])
-                        ax.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5)
+                        ax.bar(ind + width / 2.0, values, width=width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
+                        ax.bar(ind - width / 2.0, exp_values, width=width, bottom=bottoms_exp, hatch=hatch, color=colors[i % cycle_length], alpha=0.5, edgecolor='black', linewidth=1)
                     else:
                         # plt.bar(axes_labels, values, width=0.6, label=hap, bottom=bottoms, hatch=hatch)
-                        ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch)
+                        ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, hatch=hatch, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
                 
                 if gene_in_pop and (not other_plotted) and np.any(bottoms_exp > 0.0001):
                     # only plot this special one IF no "Other" was already plotted AND popfreqs is enabled AND we have pop unaccounted for
-                    ax.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1])
-                    ax.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5)
+                    ax.bar([0], [0], width=width, label='Other', hatch='//', color=colors[-1], edgecolor='black', linewidth=1)
+                    ax.bar(ind - width / 2.0, bottoms_exp, width=width, hatch='//', color=colors[-1], alpha=0.5, edgecolor='black', linewidth=1)
 
                 ax.set_xticks(ind, axes_labels)
                     
@@ -974,7 +1027,7 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     title = 'Copy number distribution for CYP2D6 by ancestry'
                     legend_title = 'Top copy numbers'
                 elif gene == 'CYP2D6_impact':
-                    title = 'Preducted CYP2D6 haplotype function by ancestry'
+                    title = 'Predicted CYP2D6 haplotype function by ancestry'
                     legend_title = 'Functional categories'
                 elif gene == 'CYP2D6_dip_func':
                     title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
@@ -1125,16 +1178,20 @@ def generateDbRep(db_haps, ancestry_data):
     ind = np.arange(len(gene_order))
 
     if PLOT_UNOBSERVED:
-        first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed')
-        last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved') #, bottom=observed_counts)
+        first_bar = plt.bar(ind - width / 2.0, observed_counts, width=width, label='Observed', edgecolor='black', linewidth=1)
+        last_bar = plt.bar(ind + width / 2.0, missing_counts, width=width, label='Unobserved', edgecolor='black', linewidth=1) #, bottom=observed_counts)
     else:
         if COLOR_BY_FRACTION:
-            cmap = plt.get_cmap('RdYlGn')
+            # cmap = plt.get_cmap('RdYlGn') # this one is hard for color blind
+            # winter - too bright
+            # PRGn - a little dark, but pretty good
+            # PiYG - is this good for color blind? this seems to say yes: https://www.aptech.com/releases/gauss18/graphics-updates/color-brewer-palettes/
+            cmap = plt.get_cmap('PiYG')
             bar_colors = [cmap(obs / 100.0) for obs in observed_fractions]
             first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', color=bar_colors, edgecolor='black', linewidth=1)
             last_bar = [None]*len(first_bar)
         else:
-            first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed')
+            first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', edgecolor='black', linewidth=1)
             last_bar = [None]*len(first_bar)
 
     # add text fraction overlay
@@ -1169,7 +1226,8 @@ def generateDbRep(db_haps, ancestry_data):
     else:
         plt.ylim([0, 1000])
     plt.ylabel('Allele count')
-    plt.title('Count/percentage of database alleles observed in cohort')
+    if MAKE_TITLES:
+        plt.title('Count/percentage of database alleles observed in cohort')
 
     if PLOT_POP_LIMIT:
         max_obs = max(total_observations)
