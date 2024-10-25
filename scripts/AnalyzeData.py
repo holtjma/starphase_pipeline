@@ -20,17 +20,27 @@ from PipelineConfig import *
 # Config
 #####################################################
 
+# controls a bunch of fonts
+USE_LATEX = True # if True, requires a local install of latex to generate fonts
+if USE_LATEX:
+    plt.rcParams['text.usetex'] = True
+    plt.rcParams['font.family'] = "Bookman" # best so far: "Helvetica" or "Bookman"
+
 # Constants for the HLA delta fields
 ENABLE_HLA_DELTAS = True # if True, this will run the HLA delta figures as well
 HLA_MAX_DELTA = 5 # this is a cut-off between minor/major ED
 HLA_MISSING = "Missing" # no entry in DB, should only happen to DNA
 HLA_EQUAL = "Exact match (ED=0)" # exact sequence match in overlap
 HLA_OFF_BY_ONE = "Off-by-one (ED=1)" # 1bp delta, could be homo-polymer error
-HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
-HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
+if USE_LATEX:
+    HLA_MINOR_DELTA = f"Minor delta (ED$\le${HLA_MAX_DELTA})" # small delta, but greater than 1
+    HLA_MAJOR_DELTA = f"Major delta (ED$>${HLA_MAX_DELTA})" # big delta
+else:
+    HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
+    HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
 GENERATE_JOINT_FIGURES = True # enables a single joint image for some of the paper figures
 USE_CUSTOM_COLORS = True # enables a non-default color scheme
-MAKE_TITLES = True # if True, include titles
+MAKE_TITLES = False # if True, include titles
 CUSTOM_LEGEND = False # if True, shift the legend location below and make it 2-column
 
 # controls the CYP2D6 stuff
@@ -59,10 +69,12 @@ def loadD6Impact():
             'status' : status
         }
 
+    # while not specified in the file, additional copies should also have no function
     ret['*68x2'] = {
         'score' : '0.0',
         'status' : 'No function'
     }
+    ret['*68x≥3'] = ret['*68x2']
 
     # sentinel for our undefined hybrids
     ret['*None'] = {
@@ -711,6 +723,8 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             legend_title = 'Metabolizer categories'
         elif gene.endswith('dna_delta'):
             g, tag, d = gene.split('_')
+            if USE_LATEX:
+                g = f'\\textit{{{g}}}'
             if tag == 'dna':
                 tag = 'DNA'
             else:
@@ -836,6 +850,8 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             # customize title for some of the "weird" plots
             if gene.endswith('dna_delta'):
                 g, tag, d = gene.split('_')
+                if USE_LATEX:
+                    g = f'\\textit{{{g}}}'
                 if tag == 'dna':
                     tag = 'DNA'
                 else:
@@ -875,7 +891,8 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             # basic
             # fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
 
-            is_shared_labels = figure_name != 'CYP2D6_stack'
+            #is_shared_labels = figure_name != 'CYP2D6_stack'
+            is_shared_labels = False
             
             # more complicated, but we can control spacing here
             if is_shared_labels:
@@ -1030,10 +1047,15 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     title = 'Predicted CYP2D6 haplotype function by ancestry'
                     legend_title = 'Functional categories'
                 elif gene == 'CYP2D6_dip_func':
-                    title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
+                    if USE_LATEX:
+                        title = 'Predicted \\textit{CYP2D6} diplotype metabolizer phenotype by ancestry'
+                    else:
+                        title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
                     legend_title = 'Metabolizer categories'
                 elif gene.endswith('dna_delta'):
                     g, tag, d = gene.split('_')
+                    if USE_LATEX:
+                        g = f'\\textit{{{g}}}'
                     if tag == 'dna':
                         tag = 'DNA'
                     else:
@@ -1041,7 +1063,10 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     title = f'Differences between DB and consensus for {g} {tag}'
                     legend_title = 'Difference category'
                 else:
-                    title = f'Haplotype distribution for {gene} by ancestry'
+                    if USE_LATEX:
+                        title = f'Haplotype distribution for \\textit{{{gene}}} by ancestry'
+                    else:
+                        title = f'Haplotype distribution for {gene} by ancestry'
                     legend_title = 'Top haplotypes'
 
                 # ax = plt.gca()
@@ -1194,29 +1219,28 @@ def generateDbRep(db_haps, ancestry_data):
             first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', edgecolor='black', linewidth=1)
             last_bar = [None]*len(first_bar)
 
-    # add text fraction overlay
-    for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
-        # X-offset, can be derived (less precise) or fixed by enumerate
-        # offset = fb.get_x() + fb.get_width() + 0.1 # shift it right a little
-        offset = i + width + 0.1
+    # LaTeX doesn't like to give us a buffer space, so instead we're going to just disable for this one and then re-enable
+    with plt.rc_context({"text.usetex": False, "font.family" : "DejaVu Sans"}):
+        for (i, (fb, lb, obs_frac)) in enumerate(zip(first_bar, last_bar, observed_fractions)):
+            # X-offset, can be derived (less precise) or fixed by enumerate
+            # offset = fb.get_x() + fb.get_width() + 0.1 # shift it right a little
+            offset = i + width + 0.1
 
-        # Y-offset, a few options here
-        # placed at the top - gets cut off
-        if lb == None:
-            height = fb.get_height()
-        else:
-            height = max(fb.get_height(), lb.get_height())
-        
-        # constant at the bottom
-        # height = 0.1
+            # Y-offset, a few options here
+            # placed at the top - gets cut off
+            if lb == None:
+                height = fb.get_height()
+            else:
+                height = max(fb.get_height(), lb.get_height())
 
-        # use this is bottom anchored
-        # text = f'{obs_frac:6.1f}%'
-        text = f' {obs_frac:.1f}%'
-        # plt.text(offset, height, text, ha='right', va='bottom', rotation='vertical')
-        plt.annotate(text, (offset, height), ha='right', va='bottom', rotation='vertical', annotation_clip=False)
+            text = f' {obs_frac:.1f}%'
+            plt.annotate(text, (offset, height), ha='right', va='bottom', rotation='vertical', annotation_clip=False)
 
-    plt.xticks(ind, gene_order, rotation=80)
+    if USE_LATEX:
+        gene_ticks = [f'\\textit{{{g}}}' for g in gene_order]
+    else:
+        gene_ticks = gene_order
+    plt.xticks(ind, gene_ticks, rotation=90)
     ax = plt.gca()
     ax.set_axisbelow(True)
     plt.grid(axis='y')
