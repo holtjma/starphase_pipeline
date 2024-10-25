@@ -714,12 +714,18 @@ def generateAncestryPlots(ancestry_data, popfreqs):
         # customize title for some of the "weird" plots
         if gene == 'CYP2D6_cn':
             title = 'Copy number distribution for CYP2D6 by ancestry'
+            if USE_LATEX:
+                title = title.replace("CYP2D6", "\\textit{CYP2D6}")
             legend_title = 'Top copy numbers'
         elif gene == 'CYP2D6_impact':
             title = 'Predicted CYP2D6 haplotype function by ancestry'
+            if USE_LATEX:
+                title = title.replace("CYP2D6", "\\textit{CYP2D6}")
             legend_title = 'Functional categories'
         elif gene == 'CYP2D6_dip_func':
             title = 'Predicted CYP2D6 diplotype metabolizer phenotype by ancestry'
+            if USE_LATEX:
+                title = title.replace("CYP2D6", "\\textit{CYP2D6}")
             legend_title = 'Metabolizer categories'
         elif gene.endswith('dna_delta'):
             g, tag, d = gene.split('_')
@@ -732,7 +738,10 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             title = f'Differences between DB and consensus for {g} {tag}'
             legend_title = 'Difference category'
         else:
-            title = f'Haplotype distribution for {gene} by ancestry'
+            if USE_LATEX:
+                title = f'Haplotype distribution for \\textit{{{gene}}} by ancestry'
+            else:
+                title = f'Haplotype distribution for {gene} by ancestry'
             legend_title = 'Top haplotypes'
 
         ax = plt.gca()
