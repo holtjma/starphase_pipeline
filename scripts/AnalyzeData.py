@@ -32,12 +32,8 @@ HLA_MAX_DELTA = 5 # this is a cut-off between minor/major ED
 HLA_MISSING = "Missing" # no entry in DB, should only happen to DNA
 HLA_EQUAL = "Exact match (ED=0)" # exact sequence match in overlap
 HLA_OFF_BY_ONE = "Off-by-one (ED=1)" # 1bp delta, could be homo-polymer error
-if USE_LATEX:
-    HLA_MINOR_DELTA = f"Minor delta (ED$\le${HLA_MAX_DELTA})" # small delta, but greater than 1
-    HLA_MAJOR_DELTA = f"Major delta (ED$>${HLA_MAX_DELTA})" # big delta
-else:
-    HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
-    HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
+HLA_MINOR_DELTA = f"Minor delta (ED<={HLA_MAX_DELTA})" # small delta, but greater than 1
+HLA_MAJOR_DELTA = f"Major delta (ED>{HLA_MAX_DELTA})" # big delta
 GENERATE_JOINT_FIGURES = True # enables a single joint image for some of the paper figures
 USE_CUSTOM_COLORS = True # enables a non-default color scheme
 MAKE_TITLES = False # if True, include titles
@@ -185,6 +181,14 @@ def collectByAncestry(all_data, reduce_to_core):
     # [gene][ancestry][haplotype] -> count
     ancestry_counts = {}
 
+    # summary stats
+    het_dict = {}
+    hom_dict = {}
+    hemi_dict = {}
+    no_match_dict = {}
+    mt_hom_dict = {}
+    mt_het_dict = {}
+
     for data_key in all_data:
         # parse the data key and get the count
         (gene, ancestry, sex, diplotype) = data_key
@@ -221,8 +225,10 @@ def collectByAncestry(all_data, reduce_to_core):
             # special handling for mitochrondria and heteroplasmy; there may be a handful of these
             if hap1 == hap2:
                 final_hap = hap1
+                mt_hom_dict[gene] = mt_hom_dict.get(gene, 0) + count
             else:
                 final_hap = 'heteroplasmy'
+                mt_het_dict[gene] = mt_het_dict.get(gene, 0) + count
             ancestry_counts[gene][ancestry][final_hap] = ancestry_counts[gene][ancestry].get(final_hap, 0) + count
         
         elif gene == 'G6PD' and sex == 'male':
@@ -230,6 +236,9 @@ def collectByAncestry(all_data, reduce_to_core):
             if hap1 != hap2:
                 raise Exception('handle het male')
             
+            # hemi-zygous
+            hemi_dict[gene] = hemi_dict.get(gene, 0) + count
+
             final_hap = hap1
             ancestry_counts[gene][ancestry][final_hap] = ancestry_counts[gene][ancestry].get(final_hap, 0) + count
         
@@ -256,6 +265,15 @@ def collectByAncestry(all_data, reduce_to_core):
             ancestry_counts[gene][ancestry][hap1] = ancestry_counts[gene][ancestry].get(hap1, 0) + count
             ancestry_counts[gene][ancestry][hap2] = ancestry_counts[gene][ancestry].get(hap2, 0) + count
 
+            # these are the only ones with het/hom info
+            if hap1 == 'NO_MATCH' or hap2 == 'NO_MATCH':
+                # no counting it
+                no_match_dict[gene] = no_match_dict.get(gene, 0) + count
+            elif hap1 == hap2:
+                hom_dict[gene] = hom_dict.get(gene, 0) + count
+            else:
+                het_dict[gene] = het_dict.get(gene, 0) + count
+
             if gene == 'CYP2D6':
                 # get the haplotype copy number
                 hap_scores = []
@@ -275,7 +293,34 @@ def collectByAncestry(all_data, reduce_to_core):
                 dip_function = scoreDipCyp2d6(hap_scores[0], hap_scores[1])
                 ancestry_counts['CYP2D6_dip_func'][ancestry][dip_function] = ancestry_counts['CYP2D6_dip_func'][ancestry].get(dip_function, 0) + count
     
-    return ancestry_counts
+    # add it up
+    total_hets = sum(het_dict.values())
+    total_homs = sum(hom_dict.values())
+    total_hemi = sum(hemi_dict.values())
+    total_no_match = sum(no_match_dict.values())
+    total_mt_hom = sum(mt_hom_dict.values())
+    total_mt_het = sum(mt_het_dict.values())
+    combined = total_hets + total_homs + total_hemi + total_no_match + total_mt_hom + total_mt_het
+
+    combined_counts = {
+        'hets' : het_dict,
+        'homs' : hom_dict,
+        'hemis' : hemi_dict,
+        'no_matches' : no_match_dict,
+        'mt_homs' : mt_hom_dict,
+        'mt_hets' : mt_het_dict,
+    }
+
+    # print it
+    print(f'\tTotal hets: {total_hets}')
+    print(f'\tTotal homs: {total_homs}')
+    print(f'\tHet/hom ratio (includes REF alleles): {total_hets / total_homs}')
+    print(f'\tTotal hemi: {total_hemi}')
+    print(f'\tTotal NO_MATCH: {total_no_match} ({total_no_match / combined})')
+    print(f'\tTotal MT homs: {total_mt_hom}')
+    print(f'\tTotal MT heteroplasmy: {total_mt_het}')
+
+    return ancestry_counts, combined_counts
 
 def reduceHlaHap(hap):
     '''
@@ -690,6 +735,9 @@ def generateAncestryPlots(ancestry_data, popfreqs):
             if len(hap) > max_len:
                 hap = hap[:max_len-3]+'...'
             
+            if USE_LATEX:
+                hap = hap.replace('>', '$>$').replace('<=', '$\\le$')
+            
             if i >= 2*cycle_length:
                 raise Exception('need additional hatches')
             elif i >= cycle_length:
@@ -851,6 +899,8 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     # axes_labels.append(ancestry)
                 
                 # bottoms -= np.array(values)
+                if USE_LATEX:
+                    hap = hap.replace('>', '$>$').replace('<=', '$\\le$')
                 ax.bar(ind, values, width=2.0*width, label=hap, bottom=bottoms, color=colors[i % cycle_length], edgecolor='black', linewidth=1)
                 bottoms += np.array(values)
             
@@ -1026,6 +1076,9 @@ def generateAncestryPlots(ancestry_data, popfreqs):
                     max_len = 30
                     if len(hap) > max_len:
                         hap = hap[:max_len-3]+'...'
+
+                    if USE_LATEX:
+                        hap = hap.replace('>', '$>$').replace('<=', '$\\le$')
                     
                     if i >= 2*cycle_length:
                         raise Exception('need additional hatches')
@@ -1205,9 +1258,12 @@ def generateDbRep(db_haps, ancestry_data):
         observed_counts.append(len(shared))
         missing_counts.append(len(missing))
         total_observations.append(total_obs)
+        
+    print(f'\tUnique alleles: {observed_counts}')
+    print(f'\tSum = {np.sum(observed_counts)}')
     
     # we just have observed and unobserved
-    plt.figure()
+    plt.figure(figsize=(8,5)) # adding legend made dimensions weird, this gets back to something semi-normal looking
     width = 0.3
     ind = np.arange(len(gene_order))
 
@@ -1224,6 +1280,19 @@ def generateDbRep(db_haps, ancestry_data):
             bar_colors = [cmap(obs / 100.0) for obs in observed_fractions]
             first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', color=bar_colors, edgecolor='black', linewidth=1)
             last_bar = [None]*len(first_bar)
+
+            # custom color bar placement
+            norm = matplotlib.colors.Normalize(vmin=0.0, vmax=100.0, clip=False)
+            cb = plt.colorbar(
+                matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap),
+                format="%.0f\\%%", # %% for format; \\ for latex,
+                # location='left',
+                # orientation='horizontal',
+                shrink=0.2, aspect=5,
+                anchor=(-0.7, 0.96),
+                ticks=[0, 50, 100]
+            )
+            cb.ax.yaxis.set_ticks_position('left')
         else:
             first_bar = plt.bar(ind, observed_counts, width=2*width, label='Observed', edgecolor='black', linewidth=1)
             last_bar = [None]*len(first_bar)
@@ -1275,6 +1344,86 @@ def generateDbRep(db_haps, ancestry_data):
     plt.savefig(out_fn, bbox_inches='tight')
     plt.close()
 
+def generateZygFig(combined_zyg_counts):
+    '''
+    Compares the DB size to our observations to see how many alleles we have observed
+    @param combined_zyg_counts - [zygosity] -> dict of counts per gene
+    '''
+    debug = False
+    colors = [
+        '#1383C6', #bright blue,
+        # '#E16A2C', #bright orange
+        '#F99D41', #light orange
+        '#009D4E', #bright green; default palette has red next, which is bad for RG colorblind
+        '#5F249F', #purple
+        '#FF66CC', #magenta
+        'lightgrey',
+        #'#6ABF6A', #light green
+        #'red',
+        #'green',
+        #'blue'
+    ]
+    
+    label_translate = {
+        'hets' : 'Heterozygous',
+        'homs' : 'Homozygous',
+        'hemis' : 'Hemizygous',
+        'mt_hets' : 'Heteroplasmic',
+        'mt_homs' : 'Homoplasmic',
+        'no_matches' : 'No match diplotype'
+    }
+    stack_order = ['hets', 'homs', 'hemis', 'mt_hets', 'mt_homs', 'no_matches']
+    all_genes = set([])
+    for s in stack_order:
+        all_genes |= combined_zyg_counts[s].keys()
+    gene_order = sorted(all_genes)
+    gene_labels = []
+    
+    # we just have observed and unobserved
+    plt.figure(figsize=(8,5)) # adding legend made dimensions weird, this gets back to something semi-normal looking
+    width = 0.6
+    ind = np.arange(len(gene_order))
+
+    if debug:
+        # this plot just print the hom / total values
+        for g in gene_order:
+            het_count = combined_zyg_counts['hets'].get(g, 0)
+            hom_count = combined_zyg_counts['homs'].get(g, 0)
+            total = het_count+hom_count
+            if total > 0:
+                print(g, het_count, hom_count, hom_count / total)
+
+    bottoms = np.zeros(shape=(len(gene_order), ))
+    for (i, stack_key) in enumerate(stack_order):
+        counts = []
+        for gene in gene_order:
+            value = combined_zyg_counts[stack_key].get(gene, 0)
+            counts.append(value)
+        
+        # plot it and shift the bottoms
+        plt.bar(ind, counts, width=width, label=label_translate[stack_key], edgecolor='black', linewidth=1, bottom=bottoms, color=colors[i])
+        bottoms += np.array(counts)
+
+    if USE_LATEX:
+        gene_ticks = [f'\\textit{{{g}}}' for g in gene_order]
+    else:
+        gene_ticks = gene_order
+    plt.xticks(ind, gene_ticks, rotation=90)
+    ax = plt.gca()
+    ax.set_axisbelow(True)
+    plt.grid(axis='y')
+    # plt.yscale('symlog')
+    plt.ylabel('Zygosity count')
+    if MAKE_TITLES:
+        plt.title('Count of zygosity in cohort')
+    
+    plt.legend(bbox_to_anchor=(1.0, 0.5), loc='center left') # anchors to right side
+
+    out_fn = f'{RESULTS_FOLDER}/observed_zygs.png'
+    print(f'Saving figure to {out_fn}...')
+    plt.savefig(out_fn, bbox_inches='tight')
+    plt.close()
+
 if __name__ == '__main__':
     # first, load all the data into a single dict
     aggregate_files = glob.glob(f'{DATA_FOLDER}/cohort_aggregate_files/*.tsv')
@@ -1296,7 +1445,9 @@ if __name__ == '__main__':
     
     # consolidate everything by ancestry
     reduce_to_core = True
-    ancestry_collection = collectByAncestry(all_loaded_data, reduce_to_core)
+    ancestry_collection, combined_zyg_counts = collectByAncestry(all_loaded_data, reduce_to_core)
+
+    generateZygFig(combined_zyg_counts)
     
     hap_aggregate_fn = f'{RESULTS_FOLDER}/haplotype_aggregate.tsv'
     print(f'Saving combined haplotype aggregate to {hap_aggregate_fn}...')
